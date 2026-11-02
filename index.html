@@ -2215,15 +2215,32 @@ const onStreetX = z => Math.abs(z - Math.round(z/CITY.PITCH)*CITY.PITCH) < CITY.
 
 // Garaje físico (POLICE): casa con puerta metálica abierta en la manzana (4,5), con la puerta a la calle x = 450
 const GAR = {i:4, j:5}; GAR.fx = nodeX(GAR.i+1)-CITY.SW/2; GAR.z = nodeX(GAR.j)+CITY.PITCH/2; GAR.sx = GAR.fx+4.2; GAR.armed=false; GAR.run=false; GAR.warnT=0;
-GAR.door = GAR.fx-4; GAR.px0 = GAR.door-11.5; GAR.pw = 3.4;   // hueco transitable: vado + puerta (7 m) + interior hasta la pared del fondo
-// Choque dentro del hueco del garaje. undefined = el punto no está en el hueco (la manzana es maciza); null = libre; si no, el contacto.
+GAR.door = GAR.fx-4; GAR.px0 = GAR.door-11.5; GAR.pw = 3.4;   // puerta (7 m) e interior hasta la pared del fondo
+GAR.aw = 6; GAR.rl = 3; GAR.h = 0.2;   // vado: medio ancho en la acera, largo de la rampa en la calzada y altura de la acera
+// Altura del suelo en el acceso al garaje: rampa en la calzada, vado en la acera y suelo interior.
+function garFloor(x,z){
+  const dz=Math.abs(z-GAR.z);
+  if (x<GAR.door) return (dz<GAR.pw && x>GAR.px0-1) ? GAR.h : 0;
+  if (dz>=GAR.aw) return 0;
+  return GAR.h*clamp((GAR.fx+GAR.rl-x)/GAR.rl, 0, 1);
+}
+// Choque en el acceso al garaje (vado de 12 m en la acera que lleva a la puerta de 7 m).
+// undefined = el punto no está en el acceso (la manzana es maciza); null = libre; si no, el contacto.
 function garPocket(cx,cz,r){
-  const z0=GAR.z-GAR.pw, z1=GAR.z+GAR.pw;
-  if (cz<=z0 || cz>=z1 || cx<=GAR.px0-r || cx>=GAR.fx+r) return undefined;
+  const dz=cz-GAR.z, adz=Math.abs(dz), s=Math.sign(dz)||1, F=GAR.door;
+  if (cx<=GAR.px0-r || cx>=GAR.fx+r) return undefined;
+  if (cx>=F ? adz>=GAR.aw : adz>=GAR.pw) return undefined;
   let best=null; const put=(nx,nz,pen,qx,qz)=>{ if (pen>0 && (!best||pen>best.pen)) best={nx,nz,pen,qx,qz}; };
-  put(1,0, GAR.px0-(cx-r), GAR.px0, cz);                                                            // pared del fondo
-  if (cx<GAR.fx){ put(0,1, z0-(cz-r), cx, z0); put(0,-1, cz+r-z1, cx, z1); }                          // paredes laterales
-  else for (const qz of [z0,z1]){ const dx=cx-GAR.fx, dz=cz-qz, d=Math.hypot(dx,dz); if (d<r && d>1e-4) put(dx/d,dz/d, r-d, GAR.fx, qz); }   // esquinas del bordillo
+  const pt=(qx,qz)=>{ const ex=cx-qx, ez=cz-qz, d=Math.hypot(ex,ez); if (d<r && d>1e-4) put(ex/d,ez/d, r-d, qx,qz); };
+  if (cx<F){                                                                             // dentro de la casa
+    put(1,0, GAR.px0-(cx-r), GAR.px0, cz);                                               // pared del fondo
+    put(0,-s, adz+r-GAR.pw, cx, GAR.z+s*GAR.pw);                                         // paredes laterales
+  } else {                                                                               // en el vado
+    if (cx<GAR.fx) put(0,-s, adz+r-GAR.aw, cx, GAR.z+s*GAR.aw);                          // bordes del vado con la acera
+    else pt(GAR.fx, GAR.z+s*GAR.aw);                                                     // esquinas del bordillo
+    if (adz>=GAR.pw) put(1,0, F-(cx-r), F, cz);                                          // fachada a los lados de la puerta
+    else pt(F, GAR.z+s*GAR.pw);                                                          // jambas de la puerta
+  }
   return best;
 }
 function buildGarageHouse(grp){
@@ -2242,7 +2259,12 @@ function buildGarageHouse(grp){
   const roll=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.42,dw+0.2,18), new THREE.MeshStandardMaterial({map:metalT, metalness:0.6, roughness:0.45}));
   roll.rotation.x=Math.PI/2; roll.position.set(fx+0.45, dh+0.18+0.05, z); g.add(roll);                // persiana metálica enrollada (abierta)
   const lip=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.35,dw), new THREE.MeshStandardMaterial({map:metalT, metalness:0.6, roughness:0.45})); lip.position.set(fx+0.45, dh-0.05, z); g.add(lip);
-  box(4,0.05,dw+1, new THREE.MeshLambertMaterial({color:0xc9c6be}), fx+2, 0.205, z);                    // vado en la acera
+  const vadoM=new THREE.MeshLambertMaterial({color:0xc9c6be});
+  box(4,0.05,2*GAR.aw, vadoM, fx+2, 0.205, z);                                                           // vado en la acera
+  const rampG=new THREE.BoxGeometry(GAR.rl,GAR.h+0.03,2*GAR.aw), rp=rampG.attributes.position;          // rampa en la calzada: cuña que baja hacia la calle
+  for (let k=0;k<rp.count;k++) if (rp.getX(k)>0 && rp.getY(k)>0) rp.setY(k, -(GAR.h+0.03)/2+0.01);
+  rampG.computeVertexNormals();
+  const ramp=new THREE.Mesh(rampG, vadoM); ramp.position.set(GAR.fx+GAR.rl/2, (GAR.h+0.03)/2, z); ramp.receiveShadow=true; g.add(ramp);
   box(0.15,1.4,2.6, new THREE.MeshLambertMaterial({color:0xffffff}), fx+0.1, H-0.6, z+dw/2+3.2);       // cartel con casa
   const sign=new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.2), new THREE.MeshBasicMaterial({map:canvasTex(128,64,(c,w,h)=>{ c.fillStyle='#1f9d55'; c.fillRect(0,0,w,h); c.fillStyle='#fff'; c.beginPath(); c.moveTo(w/2,10); c.lineTo(w/2+22,30); c.lineTo(w/2+16,30); c.lineTo(w/2+16,54); c.lineTo(w/2-16,54); c.lineTo(w/2-16,30); c.lineTo(w/2-22,30); c.closePath(); c.fill(); })}));
   sign.rotation.y=Math.PI/2; sign.position.set(fx+0.19, H-0.6, z+dw/2+3.2); g.add(sign);
@@ -2321,7 +2343,7 @@ function cityCollide(e){
   const c=e.car, G=CITY.G, PI_=CITY.PITCH, SW=CITY.SW, S=CITY.SIZE;
   const hl=c.hl||HL, hw=c.hw||HWC, sn=Math.sin(c.th), cs=Math.cos(c.th), r=hw;
   c.grass=false; c.y=0; c.pitch=0;
-  if (Math.abs(c.z-GAR.z)<GAR.pw && c.x<GAR.fx+0.5 && c.x>GAR.px0-3) c.y=0.2;   // sobre el vado y el suelo del garaje
+  c.y=garFloor(c.x,c.z);   // rampa, vado y suelo del garaje
   for (const off of [-(hl-hw), 0, hl-hw]){
     for (let pass=0;pass<2;pass++){
       const cx=c.x+sn*off, cz=c.z+cs*off;
@@ -2837,7 +2859,7 @@ function garageCheck(dt){
   const p=players[0], me = PS.foot ? PED : p.car, d=Math.hypot(me.x-(GAR.fx+0.5), me.z-GAR.z);
   if (!GAR.armed){ if (d>14) GAR.armed=true; return; }
   GAR.warnT=Math.max(0,GAR.warnT-dt);
-  const inside = Math.abs(me.z-GAR.z)<GAR.pw && (PS.foot ? me.x<GAR.door-0.6 : me.x+(me.hl||HL)*0.7<GAR.door);   // ya dentro, en lo negro
+  const inside = Math.abs(me.z-GAR.z)<GAR.pw && (PS.foot ? me.x<GAR.door-0.6 : me.x+(me.hl||HL)*0.4<GAR.door);   // ya dentro, en lo negro (unos dos tercios del coche)
   if (!inside || p.wrecked) return;
   let near=1e9; for (const e of POL) if (!e.wrecked) near=Math.min(near, Math.hypot(e.car.x-me.x,e.car.z-me.z));
   for (const k of COPS) if (k.st!=='dead') near=Math.min(near, Math.hypot(k.x-me.x,k.z-me.z));
