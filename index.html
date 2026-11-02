@@ -2215,6 +2215,17 @@ const onStreetX = z => Math.abs(z - Math.round(z/CITY.PITCH)*CITY.PITCH) < CITY.
 
 // Garaje físico (POLICE): casa con puerta metálica abierta en la manzana (4,5), con la puerta a la calle x = 450
 const GAR = {i:4, j:5}; GAR.fx = nodeX(GAR.i+1)-CITY.SW/2; GAR.z = nodeX(GAR.j)+CITY.PITCH/2; GAR.sx = GAR.fx+4.2; GAR.armed=false; GAR.run=false; GAR.warnT=0;
+GAR.door = GAR.fx-4; GAR.px0 = GAR.door-11.5; GAR.pw = 3.4;   // hueco transitable: vado + puerta (7 m) + interior hasta la pared del fondo
+// Choque dentro del hueco del garaje. undefined = el punto no está en el hueco (la manzana es maciza); null = libre; si no, el contacto.
+function garPocket(cx,cz,r){
+  const z0=GAR.z-GAR.pw, z1=GAR.z+GAR.pw;
+  if (cz<=z0 || cz>=z1 || cx<=GAR.px0-r || cx>=GAR.fx+r) return undefined;
+  let best=null; const put=(nx,nz,pen,qx,qz)=>{ if (pen>0 && (!best||pen>best.pen)) best={nx,nz,pen,qx,qz}; };
+  put(1,0, GAR.px0-(cx-r), GAR.px0, cz);                                                            // pared del fondo
+  if (cx<GAR.fx){ put(0,1, z0-(cz-r), cx, z0); put(0,-1, cz+r-z1, cx, z1); }                          // paredes laterales
+  else for (const qz of [z0,z1]){ const dx=cx-GAR.fx, dz=cz-qz, d=Math.hypot(dx,dz); if (d<r && d>1e-4) put(dx/d,dz/d, r-d, GAR.fx, qz); }   // esquinas del bordillo
+  return best;
+}
 function buildGarageHouse(grp){
   const g=new THREE.Group(); grp.add(g);
   const fx=GAR.fx-4, z=GAR.z, W=20, D=12, H=6.5;   // fachada a 4 m del bordillo (acera)
@@ -2310,6 +2321,7 @@ function cityCollide(e){
   const c=e.car, G=CITY.G, PI_=CITY.PITCH, SW=CITY.SW, S=CITY.SIZE;
   const hl=c.hl||HL, hw=c.hw||HWC, sn=Math.sin(c.th), cs=Math.cos(c.th), r=hw;
   c.grass=false; c.y=0; c.pitch=0;
+  if (Math.abs(c.z-GAR.z)<GAR.pw && c.x<GAR.fx+0.5 && c.x>GAR.px0-3) c.y=0.2;   // sobre el vado y el suelo del garaje
   for (const off of [-(hl-hw), 0, hl-hw]){
     for (let pass=0;pass<2;pass++){
       const cx=c.x+sn*off, cz=c.z+cs*off;
@@ -2323,6 +2335,7 @@ function cityCollide(e){
         const bi=Math.floor(cx/PI_), bj=Math.floor(cz/PI_);
         for (let i=bi-1;i<=bi+1;i++) for (let j=bj-1;j<=bj+1;j++){
           if (i<0||j<0||i>=G||j>=G) continue;
+          if (i===GAR.i && j===GAR.j){ const k=garPocket(cx,cz,r); if (k!==undefined){ if (k && (!best||k.pen>best.pen)) best=k; continue; } }
           const x0=i*PI_+SW/2, x1=(i+1)*PI_-SW/2, z0=j*PI_+SW/2, z1=(j+1)*PI_-SW/2;
           const qx=clamp(cx,x0,x1), qz=clamp(cz,z0,z1), dx=cx-qx, dz=cz-qz, d=Math.hypot(dx,dz);
           if (d>=r) continue;
@@ -2796,6 +2809,7 @@ function pushOutBlocks(o, r){
   const P_=CITY.PITCH, h=CITY.SW/2, G=CITY.G;
   for (let i=Math.floor((o.x-r)/P_); i<=Math.floor((o.x+r)/P_); i++) for (let j=Math.floor((o.z-r)/P_); j<=Math.floor((o.z+r)/P_); j++){
     if (i<0||j<0||i>=G||j>=G) continue;
+    if (i===GAR.i && j===GAR.j){ const k=garPocket(o.x,o.z,r); if (k!==undefined){ if (k){ o.x+=k.nx*k.pen; o.z+=k.nz*k.pen; } continue; } }
     const x0=i*P_+h, x1=(i+1)*P_-h, z0=j*P_+h, z1=(j+1)*P_-h, qx=clamp(o.x,x0,x1), qz=clamp(o.z,z0,z1), dx=o.x-qx, dz=o.z-qz, d=Math.hypot(dx,dz);
     if (d>=r) continue;
     if (d>1e-4){ o.x=qx+dx/d*r; o.z=qz+dz/d*r; }
@@ -2823,7 +2837,8 @@ function garageCheck(dt){
   const p=players[0], me = PS.foot ? PED : p.car, d=Math.hypot(me.x-(GAR.fx+0.5), me.z-GAR.z);
   if (!GAR.armed){ if (d>14) GAR.armed=true; return; }
   GAR.warnT=Math.max(0,GAR.warnT-dt);
-  if (d > (PS.foot?1.8:4.6) || p.wrecked) return;
+  const inside = Math.abs(me.z-GAR.z)<GAR.pw && (PS.foot ? me.x<GAR.door-0.6 : me.x+(me.hl||HL)*0.7<GAR.door);   // ya dentro, en lo negro
+  if (!inside || p.wrecked) return;
   let near=1e9; for (const e of POL) if (!e.wrecked) near=Math.min(near, Math.hypot(e.car.x-me.x,e.car.z-me.z));
   for (const k of COPS) if (k.st!=='dead') near=Math.min(near, Math.hypot(k.x-me.x,k.z-me.z));
   if (near<90){ if (GAR.warnT<=0){ toastP(p,'La policía está demasiado cerca','bad',1.4); GAR.warnT=2; } return; }
