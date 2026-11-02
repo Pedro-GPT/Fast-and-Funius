@@ -112,6 +112,15 @@ body.inmenu #nitroFx{display:none}
 #pHpTxt{font:700 16px var(--f-num);font-variant-numeric:tabular-nums;min-width:52px;text-align:right}
 #pmapWrap{position:absolute;left:var(--gl);bottom:var(--bot);width:180px;height:180px;border-radius:50%;padding:0;overflow:hidden;border:2px solid rgba(255,255,255,.25)}
 #pmap{width:100%;height:100%;display:block}
+#xhair,#ammo{display:none}
+body.armed #xhair{display:block;position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;transition:width .12s,height .12s,margin .12s}
+#xhair::before,#xhair::after{content:'';position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 2px rgba(0,0,0,.8)}
+#xhair::before{left:50%;top:0;bottom:0;width:2px;margin-left:-1px}
+#xhair::after{top:50%;left:0;right:0;height:2px;margin-top:-1px}
+body.aiming #xhair{width:14px;height:14px;margin:-7px 0 0 -7px}
+body.armed #ammo{display:flex;position:absolute;right:calc(var(--gr, 16px) + 4px);bottom:150px;align-items:baseline;gap:10px;padding:8px 14px}
+#ammo b{font:800 22px var(--f-num);letter-spacing:.12em;color:#ffc61a}
+#footHint{position:absolute;left:50%;bottom:22%;transform:translateX(-50%);font:800 22px var(--f-num);letter-spacing:.05em;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.75);white-space:nowrap}
 #pWarn{position:absolute;left:50%;top:38%;transform:translateX(-50%);text-align:center;font:800 40px var(--f-num);color:#ff3b30;text-shadow:0 2px 16px rgba(0,0,0,.7);letter-spacing:.04em}
 #pWarn small{display:block;font:700 22px var(--f-num);color:var(--ink)}
 body.mobile #phudTop{min-width:0;padding:8px 12px;gap:5px}
@@ -259,6 +268,9 @@ body.mobile.portrait #rotate{display:grid}
   <div id="pStars" aria-label="Nivel de búsqueda"></div>
   <div id="pStarsR" class="red" aria-label="Nivel de búsqueda rojo" hidden></div>
   <div id="pWarn" hidden>¡BLOQUEADO!<small id="pWarnT">3.0 s</small></div>
+  <div id="xhair" aria-hidden="true"></div>
+  <div class="panel" id="ammo"><span class="lbl">Pistola</span><b id="ammoPips"></b></div>
+  <div id="footHint" hidden></div>
 </div>
 <div class="hud" id="nitroFx"></div>
 <div class="hud" id="touchUI">
@@ -1799,6 +1811,8 @@ const SFX = (()=>{
   function shot(x,z){ if (!ok()) return; const sp=spatial(x,z), k=Math.max(0.12,sp.g), t=ctx.currentTime;
     const g=out(sp.pan), n=noiseSrc(), hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=700; n.connect(hp); hp.connect(g); env(g,t,0.6*k,0.001,0.14); n.start(t); n.stop(t+0.25);
     const o=osc('sine',160), og=out(sp.pan); o.frequency.setValueAtTime(180,t); o.frequency.exponentialRampToValueAtTime(50,t+0.12); o.connect(og); env(og,t,0.45*k,0.001,0.14); o.start(t); o.stop(t+0.25); }
+  function dry(){ if (!ok()) return; const t=ctx.currentTime; tone('square',1900,t,0.025,0.12,1100,5000); }   // gatillo sin balas
+  function rack(){ if (!ok()) return; const t=ctx.currentTime; tone('square',900,t,0.03,0.14,500,3500); tone('square',1400,t+0.09,0.03,0.12,800,4000); }   // coger pistola
   function hurt(){ if (!ok()) return; const t=ctx.currentTime; tone('square',300,t,0.07,0.14,180,1400); const g=out(0), n=noiseSrc(), lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=600; n.connect(lp); lp.connect(g); env(g,t,0.4,0.002,0.1); n.start(t); n.stop(t+0.2); }
   let hiss=null;
   function nitroHiss(on){ if (!ok()) return;
@@ -1811,7 +1825,7 @@ const SFX = (()=>{
     if (!live){ for (const s of S.values()) tgt(s.g.gain,0,0.06); if (hiss) tgt(hiss.g.gain,0,0.05); }
   }
   function stopSirens(){ sirens([]); }
-  return {init, car, sirens, level, redLevel, shot, hurt, nitro, nitroHiss, stopSirens, listen, impact, impactAt, explosion, pickup, alert, warn, ui, swish, end,
+  return {init, car, sirens, level, redLevel, shot, dry, rack, hurt, nitro, nitroHiss, stopSirens, listen, impact, impactAt, explosion, pickup, alert, warn, ui, swish, end,
     get vol(){ return st.vol; }, get muted(){ return st.muted; },
     setVol(v){ st.vol=clamp(v,0,1); if (st.vol>0) st.muted=false; applyVol(); save(); },
     toggleMute(){ st.muted=!st.muted; applyVol(); save(); }, onChange(f){ subs.add(f); } };
@@ -1995,6 +2009,7 @@ addEventListener('keydown', e=>{
   if ((e.code==='KeyP' || e.code==='Escape') && !inMain()){ paused ? resume() : pause(); return; }
   if (e.code==='KeyR' && !paused && !policeMode) resetOnTrack();
   if (e.code==='KeyF' && !paused && policeMode) toggleFoot();
+  if (e.code==='KeyE' && !paused && policeMode && PS.foot) pickGun();
 });
 addEventListener('keyup', e=>{ keys[e.code]=false; });
 // ---- Panel de ajuste del derrape POLICE (tecla T) ----
@@ -2746,6 +2761,27 @@ function copFaceTex(){
 }
 let PFACE=null, PNECK=null, PNUM=null, PBACK=null, CFACE=null;
 // --- modelo ---
+// Pistola semiautomática compacta (~19 cm). Origen en el centro de la empuñadura; cañón hacia +z, parte de arriba hacia +y.
+function buildPistol(){
+  const g=new THREE.Group(), shadow=!IS_MOBILE;
+  const slideM=pmat('pSlide',0x1b1c1f,0.32,{metalness:0.75}), polyM=pmat('pPoly',0x121315,0.75), darkM=pmat('pDark',0x050505,0.6), sightM=pmat('pSight',0xe8e8e0,0.5);
+  const B=(k,w,h,d,m,x,y,z,par)=>{ const b=new THREE.Mesh(pgeo(k,()=>new THREE.BoxGeometry(w,h,d)),m); b.position.set(x,y,z); b.castShadow=shadow; (par||g).add(b); return b; };
+  B('pSl',0.026,0.031,0.186,slideM, 0,0.078,0.036);                                    // corredera
+  for (let i=0;i<5;i++) B('pSer',0.0275,0.022,0.003,darkM, 0,0.078,-0.045+i*0.007);    // estrías de la corredera
+  B('pEj',0.0272,0.011,0.03,darkM, 0.0005,0.084,0.05);                                 // ventana de expulsión
+  B('pFr',0.022,0.019,0.15,polyM, 0,0.054,0.048);                                     // armazón
+  B('pRail',0.018,0.006,0.045,polyM, 0,0.042,0.1);                                    // raíl bajo el cañón
+  const grip=B('pGr',0.028,0.108,0.047,polyM, 0,0.0,-0.006); grip.rotation.x=0.3;     // empuñadura inclinada
+  B('pGrT',0.029,0.07,0.035,darkM, 0,0.002,0.0015,grip).scale.set(1,1,0.4);           // textura lateral
+  B('pMag',0.03,0.011,0.05,polyM, 0,-0.058,0,grip);                                    // base del cargador
+  const guard=new THREE.Mesh(pgeo('pGd',()=>new THREE.TorusGeometry(0.019,0.003,6,14)), polyM); guard.rotation.y=Math.PI/2; guard.position.set(0,0.036,0.05); g.add(guard);   // guardamonte
+  B('pTr',0.005,0.02,0.005,darkM, 0,0.034,0.048).rotation.x=0.25;                     // gatillo
+  B('pFs',0.004,0.006,0.005,sightM, 0,0.097,0.122);                                    // mira delantera
+  B('pRs',0.02,0.006,0.007,slideM, 0,0.097,-0.05);                                     // mira trasera
+  const muz=new THREE.Mesh(pgeo('pMz',()=>new THREE.CylinderGeometry(0.0055,0.0055,0.004,10)), darkM); muz.rotation.x=Math.PI/2; muz.position.set(0,0.08,0.13); g.add(muz);   // boca del cañón
+  const tip=new THREE.Object3D(); tip.position.set(0,0.08,0.14); g.add(tip); g.userData.muzzle=tip;
+  return g;
+}
 function buildPerson(kind){
   const P = kind==='prisoner';
   if (P && !PFACE){ PFACE=prisonerFaceTex(); PNECK=neckTattooTex(); PNUM=textTex(['6843'],256,96,78); PBACK=textTex(['STEELGATE','PRISON'],512,224,84); }
@@ -2784,7 +2820,7 @@ function buildPerson(kind){
     M(pgeo('farm'+kind,()=>new THREE.CylinderGeometry(P?0.06:0.052,P?0.052:0.046,0.25,10)), cloth, el, 0,-0.125,0);
     const hand=M(pgeo('hand',()=>new THREE.SphereGeometry(0.045,10,8)), skin, el, 0,-0.29,0.005); hand.scale.set(0.8,1.15,0.6);
     if (P) M(pgeo('cuff',()=>new THREE.TorusGeometry(0.05,0.009,6,14)), pmat('gold',0xd9b445,0.3,{metalness:0.9}), el, 0,-0.235,0).rotation.x=Math.PI/2;
-    if (!P && s<0){ gun=M(pgeo('gun',()=>new THREE.BoxGeometry(0.03,0.07,0.17)), pmat('gunM',0x161616,0.45,{metalness:0.5}), el, 0,-0.32,0.06); }
+    if (s<0){ gun=buildPistol(); gun.position.set(0,-0.3,0); gun.rotation.x=Math.PI/2; el.add(gun); if (P) gun.visible=false; }   // el prisionero solo la lleva si la coge
     arms.push({sh,el,hand,s});
     const hp=new THREE.Group(); hp.position.set(s*0.1,0,0); hips.add(hp);
     M(pgeo('thigh'+kind,()=>new THREE.CylinderGeometry(P?0.098:0.085,P?0.088:0.074,0.46,10)), legM, hp, 0,-0.23,0);
@@ -2808,11 +2844,13 @@ function posePerson(B, st, dt, spd){
     L.kn.rotation.x = (st==='crouch'?1.3:0.06) + A*1.15*Math.max(0, Math.sin(B.ph+k-1.3));
     if (st==='crouch') L.hp.rotation.x=-1.0; }
   B.hips.position.y = st==='crouch' ? 0.62 : 0.93 + (run?0.045:walk?0.02:0)*Math.abs(Math.cos(B.ph)) - (run?0.03:0);
-  B.torso.rotation.x = run?0.3 : walk?0.06 : st==='crouch'?0.35 : 0.01*Math.sin(t*1.7);
+  const ak=B.aimK||0;   // 0..1: brazos estirados apuntando (prisionero con pistola)
+  B.torso.rotation.x = (run?0.3 : walk?0.06 : st==='crouch'?0.35 : 0.01*Math.sin(t*1.7))*(1-0.85*ak);
   for (const a of B.arms){
-    if (B.kind==='prisoner'){   // esposado: manos juntas delante
-      a.sh.rotation.set(-0.3 - (run?0.25:0) + (run?0.12*Math.sin(2*B.ph):walk?0.04*Math.sin(2*B.ph):0.02*Math.sin(t*1.7)), 0, -a.s*0.3);
-      a.el.rotation.set(-0.6 - (run?0.35:0), 0, 0);
+    if (B.kind==='prisoner'){   // esposado: manos juntas delante; al apuntar, las dos manos en la pistola
+      const x0=-0.3 - (run?0.25:0) + (run?0.12*Math.sin(2*B.ph):walk?0.04*Math.sin(2*B.ph):0.02*Math.sin(t*1.7)), e0=-0.6 - (run?0.35:0);
+      a.sh.rotation.set(lerp(x0, -1.5-(B.aimPitch||0)+(B.kick||0), ak), 0, lerp(-a.s*0.3, -a.s*0.41, ak));
+      a.el.rotation.set(lerp(e0, 0, ak), 0, 0);
     } else if (st==='aim'){
       if (a.s<0){ a.sh.rotation.set(-1.5,0,0.12); a.el.rotation.set(0,0,0); } else { a.sh.rotation.set(-1.35,0,-0.42); a.el.rotation.set(-0.25,0,0); }
     } else { a.sh.rotation.set(a.s*A*0.9*Math.sin(B.ph) , 0, -a.s*0.06); a.el.rotation.set(-0.25-(run?0.9:0.1),0,0); }
@@ -2847,7 +2885,7 @@ function pushOutCar(o, c, r){ const q=touchCar(c,o.x,o.z,r); if (!q) return fals
   o.x=c.x+cs*q.lx+sn*q.lz; o.z=c.z-sn*q.lx+cs*q.lz; return true; }
 function doorPos(c){ const lx=(c.hw||HWC)+0.55, lz=0.25, sn=Math.sin(c.th), cs=Math.cos(c.th); return {x:c.x+cs*lx+sn*lz, z:c.z-sn*lx+cs*lz}; }
 // --- estado ---
-const PED = {obj:null, x:0, z:0, th:0, v:0, vx:0, vz:0, hp:5, dead:false, trans:null, sprint:false, fallV:null};
+const PED = {obj:null, x:0, z:0, th:0, v:0, vx:0, vz:0, hp:5, dead:false, trans:null, sprint:false, fallV:null, gun:false, ammo:0, aim:false, fireT:0, fireReq:false};
 const COPS = [], PARKED = [];
 function holdStill(inp, c){ inp.steer=0; inp.hb=false; inp.nitro=false; inp.brk = c.vlong>0.3 ? 1 : 0; inp.thr = c.vlong<-0.3 ? 1 : 0; }   // frenar sin meter marcha atrás
 function garageExit(p){   // coloca al jugador saliendo de la puerta del garaje
@@ -2888,7 +2926,8 @@ function garageLeave(){   // salir del garaje sin cambiar de coche
 function homeCar(p){ if (!p.homeCar) p.homeCar=p.car; p.car=p.homeCar; Object.assign(p.car, freshCar(), {drOn:false, dA:0, dBlock:false, vTop:0}); }   // vuelve al objeto de coche original del jugador
 function freshCar(){ return {x:0,y:0,z:0,th:0,vx:0,vz:0,w:0,steer:0,vlong:0,vlat:0,slipR:0,slipF:0,idx:0,grass:false,ax:0,pitch:0}; }
 function footReset(){
-  PS.foot=false; PED.dead=false; PED.trans=null; PED.hp=5; if (PED.obj){ PED.obj.g.visible=false; PED.obj.fallK=0; }
+  PS.foot=false; PED.dead=false; PED.trans=null; PED.hp=5; PED.gun=false; PED.ammo=0; PED.aim=false; releaseMouse(); footHud();
+  if (PED.obj){ PED.obj.g.visible=false; PED.obj.fallK=0; PED.obj.aimK=0; PED.obj.gun.visible=false; }
   for (const k of COPS) scene.remove(k.B.g); COPS.length=0;
   for (const e of PARKED) disposeCar(e.obj); PARKED.length=0;
   for (const t of TRACERS) t.visible=false;
@@ -2909,7 +2948,8 @@ function toggleFoot(){
     if (Math.hypot(c.vx,c.vz) > 30/3.6){ toastP(p,'Frena para salir','',1.0); return; }
     if (!PED.obj){ PED.obj=buildPerson('prisoner'); scene.add(PED.obj.g); }
     const d=doorPos(c); PS.foot=true; PS.nitroOn=false; p.inp.nitro=false; p.inp.thr=0; p.inp.steer=0; c.lean=0; riderVis(p,false);
-    PED.hp=5; PED.dead=false; PED.th=c.th; PED.x=c.x; PED.z=c.z; PED.v=0; PED.vx=PED.vz=0; PED.obj.fallK=0; PED.obj.g.visible=true;
+    PED.hp=5; PED.dead=false; PED.th=c.th; PED.x=c.x; PED.z=c.z; PED.v=0; PED.vx=PED.vz=0; PED.obj.fallK=0; PED.obj.g.visible=true; PED.obj.aimK=0;
+    p.cam.yaw=c.th; p.cam.pitch=0; PED.fireReq=false;
     PED.trans={dir:'out', t:0, dur:0.45, ax:c.x, az:c.z, bx:d.x, bz:d.z};
     document.body.classList.add('onfoot');
   } else {
@@ -2935,7 +2975,7 @@ function enterVehicle(ent){
     c.vTop = topSpeed(c);
   }
   riderVis(p,true);
-  PS.foot=false; PED.obj.g.visible=false; document.body.classList.remove('onfoot');
+  PS.foot=false; PED.obj.g.visible=false; PED.aim=false; releaseMouse(); footHud(); document.body.classList.remove('onfoot');
 }
 // --- control del prisionero ---
 function pedControl(dt){
@@ -2949,18 +2989,88 @@ function pedControl(dt){
     if (k>=1){ PED.trans=null; if (T.dir==='in') enterVehicle(T.ent); }
     return; }
   const live=!PS.over;
-  const up=live&&(any(ks.up)||touch.gas), dn=live&&(any(ks.dn)||touch.brake), lf=live&&any(ks.lf), rt=live&&any(ks.rt);
-  const steer = live ? (((lf?1:0)-(rt?1:0)) || touch.steer) : 0;
-  PED.sprint = live && up;   // a pie solo se corre
-  PED.th += steer*(PED.sprint?2.4:3.0)*dt;
-  const tv = up ? 6.8 : 0;
-  PED.v += clamp(tv-PED.v, -14*dt, 14*dt);
-  PED.vx=Math.sin(PED.th)*PED.v; PED.vz=Math.cos(PED.th)*PED.v;
+  if (IS_MOBILE){   // móvil: joystick para girar y pedal para correr
+    const up=live&&(any(ks.up)||touch.gas), lf=live&&any(ks.lf), rt=live&&any(ks.rt);
+    const steer = live ? (((lf?1:0)-(rt?1:0)) || touch.steer) : 0;
+    PED.sprint = live && up;
+    PED.th += steer*(PED.sprint?2.4:3.0)*dt;
+    PED.v += clamp((up?6.8:0)-PED.v, -14*dt, 14*dt);
+    PED.vx=Math.sin(PED.th)*PED.v; PED.vz=Math.cos(PED.th)*PED.v;
+  } else {          // ordenador: W/S adelante y atrás, A/D de lado, el ratón decide hacia dónde se mira
+    const k_=c=>live && !!keys[c];
+    p.cam.yaw += ((k_('ArrowLeft')?1:0)-(k_('ArrowRight')?1:0))*2.4*dt;   // sin ratón, las flechas giran la vista
+    PED.aim = live && MOUSE.r && PED.gun;
+    const fw=(k_('KeyW')||k_('ArrowUp')?1:0)-(k_('KeyS')||k_('ArrowDown')?1:0), sd=(k_('KeyA')?1:0)-(k_('KeyD')?1:0);
+    const yaw=p.cam.yaw, fx=Math.sin(yaw), fz=Math.cos(yaw), lx=fz, lz=-fx;   // delante e izquierda de la vista
+    const vF = fw>0 ? (PED.aim?2.6:6.8) : (PED.aim?2.2:3.2), vS = PED.aim?2.4:4.5;
+    let tx=fx*fw*vF+lx*sd*vS, tz=fz*fw*vF+lz*sd*vS; const tl=Math.hypot(tx,tz), cap=fw?vF:vS; if (tl>cap){ tx*=cap/tl; tz*=cap/tl; }
+    PED.vx += clamp(tx-PED.vx, -14*dt, 14*dt); PED.vz += clamp(tz-PED.vz, -14*dt, 14*dt);
+    PED.v = Math.hypot(PED.vx,PED.vz); PED.sprint = fw>0 && !PED.aim;
+    if (PED.v>0.3 || PED.aim) PED.th += angDiff(PED.th, yaw)*Math.min(1, dt*(PED.aim?16:9));   // el cuerpo mira hacia donde apunta la vista
+    B.aimK = approach(B.aimK||0, PED.aim?1:0, dt*7); B.aimPitch = p.cam.pitch||0; B.kick = Math.max(0,(B.kick||0)-dt*1.2);
+    PED.fireT = Math.max(0, PED.fireT-dt);
+    if (PED.fireReq){ PED.fireReq=false; if (live && PED.gun && PED.fireT<=0){ if (PED.ammo>0) pedShoot(p); else { SFX.dry(); toastP(p,'Sin balas','',0.8); PED.fireT=0.25; } } }
+  }
   PED.x+=PED.vx*dt; PED.z+=PED.vz*dt;
   pushOutBlocks(PED,0.3);
-  posePerson(B, Math.abs(PED.v)<0.25?'idle': PED.sprint&&PED.v>3.5?'run':'walk', dt, PED.v);
+  posePerson(B, PED.v<0.25?'idle': PED.sprint&&PED.v>3.5?'run':'walk', dt, PED.v);
   placePerson(B,PED);
+  footHud();
 }
+// --- pistola del prisionero: se coge del cuerpo de un policía (E), 5 balas, se apunta con el botón derecho del ratón ---
+const MOUSE = {r:false};
+function lootable(){ let best=null, bd=1.6; for (const k of COPS) if (k.st==='dead' && !k.looted){ const d=Math.hypot(k.x-PED.x,k.z-PED.z); if (d<bd){ bd=d; best=k; } } return best; }
+function pickGun(){
+  if (!policeMode || paused || !PS.foot || PED.dead || PED.trans) return;
+  const k=lootable(); if (!k) return;
+  k.looted=true; if (k.B.gun) k.B.gun.visible=false;
+  PED.gun=true; PED.ammo=5; PED.obj.gun.visible=true; SFX.rack(); toastP(players[0],'Pistola · 5 balas','good',1.2);
+}
+function pedShoot(p){
+  const cam=p.camera, o=cam.position, d=cam.getWorldDirection(_v2), spr = PED.aim ? 0.004 : 0.05+0.02*Math.min(1,PED.v/4);
+  d.x+=rnd(-spr,spr); d.y+=rnd(-spr,spr)*0.7; d.z+=rnd(-spr,spr); d.normalize();
+  const t0=Math.max(0.5, Math.hypot(PED.x-o.x, PED.z-o.z)-0.4), cars=allCars();
+  let hit=null, t=t0, x=0, y=0, z=0, what='air';
+  for (; t<130; t+=0.2){ x=o.x+d.x*t; y=o.y+d.y*t; z=o.z+d.z*t;
+    if (y<=0.02){ what='ground'; break; }
+    if (inBlock(x,z)){ what='wall'; break; }
+    for (const k of COPS) if (k.st!=='dead' && y<1.85 && Math.hypot(x-k.x,z-k.z)<0.27){ hit=k; break; }
+    if (hit){ what='cop'; break; }
+    if (y<1.3 && cars.some(c=>touchCar(c,x,z,0))){ what='car'; break; }
+  }
+  const m=PED.obj.gun.userData.muzzle; PED.obj.g.updateMatrixWorld(true); m.getWorldPosition(_v1);
+  tracer(_v1.x,_v1.y,_v1.z, x,y,z);
+  spawn(FIRE,{x:_v1.x,y:_v1.y,z:_v1.z,vx:d.x*3,vy:d.y*3,vz:d.z*3,life:0.06,s0:0.32,s1:0.12,a:1,c0:0xfff0b0,c1:0xff9a30});
+  if (what!=='air' && what!=='cop') spawn(SMOKE,{x,y:Math.max(0.05,y),z,vx:-d.x*0.6,vy:0.5,vz:-d.z*0.6,life:0.5,s0:0.15,s1:0.6,a:0.5,c0:0x8a8580,c1:0xb5b0a8});
+  SFX.shot(PED.x,PED.z);
+  PED.ammo--; PED.fireT=0.3; p.cam.pitch=clamp((p.cam.pitch||0)+0.03,-0.55,0.7); PED.obj.kick=0.12;
+  if (hit){ const head = y>1.55; hit.hp = head ? 0 : (hit.hp??2)-1; SFX.impactAt(hit.x,hit.z,0.35);
+    if (hit.hp<=0){ copDie(hit, d.x*5, d.z*5); toastP(p, head?'¡Policía abatido! · a la cabeza':'¡Policía abatido!','good',1.2); }
+    else toastP(p,'Impacto','good',0.6); }
+}
+function footHud(){
+  const show=policeMode && PS.foot && !PED.dead && !IS_MOBILE;
+  document.body.classList.toggle('armed', show && PED.gun); document.body.classList.toggle('aiming', show && PED.aim);
+  if (show && PED.gun){ const t='●'.repeat(PED.ammo)+'○'.repeat(5-PED.ammo); if ($('ammo').dataset.t!==t){ $('ammo').dataset.t=t; $('ammoPips').textContent=t; } }
+  let hint='';
+  if (show && !PED.trans){ const k=lootable(); if (k && (!PED.gun || PED.ammo<5)) hint='E · Coger la pistola'; else if (document.pointerLockElement!==renderer.domElement && !paused) hint='Haz clic para mirar con el ratón'; }
+  const h=$('footHint'); if (h.textContent!==hint){ h.textContent=hint; h.hidden=!hint; }
+}
+addEventListener('mousedown', e=>{
+  if (IS_MOBILE || !policeMode || paused || !PS.foot || PED.dead) return;
+  if (e.target.closest && e.target.closest('button,.ovl,#driftPanel')) return;
+  if (document.pointerLockElement!==renderer.domElement){ try{ renderer.domElement.requestPointerLock(); }catch(_){} if (e.button!==2) return; }
+  if (e.button===0) PED.fireReq=true; else if (e.button===2) MOUSE.r=true;
+});
+addEventListener('mouseup', e=>{ if (e.button===2) MOUSE.r=false; });
+addEventListener('mousemove', e=>{
+  if (document.pointerLockElement!==renderer.domElement || !PS.foot || paused) return;
+  const p=players[0], s=PED.aim?0.0013:0.0024;
+  p.cam.yaw -= e.movementX*s; p.cam.pitch = clamp((p.cam.pitch||0) - e.movementY*s, -0.55, 0.7);
+});
+addEventListener('contextmenu', e=>{ if (policeMode && PS.foot) e.preventDefault(); });
+document.addEventListener('pointerlockchange', ()=>{ if (!document.pointerLockElement){ MOUSE.r=false; if (policeMode && PS.foot && !paused && !PS.over) pause(); } });
+function releaseMouse(){ MOUSE.r=false; if (document.pointerLockElement) try{ document.exitPointerLock(); }catch(_){} }
 function placePerson(B,o){ B.g.position.set(o.x,0,o.z); B.g.rotation.y=o.th; }
 // --- policías a pie ---
 const TRACERS=[];
@@ -2973,7 +3083,7 @@ function spawnCop(e, mode){
   if (COPS.filter(k=>k.st!=='dead').length >= (IS_MOBILE?6:12)) { if (mode!=='push') return null; }
   const B=buildPerson('cop'); scene.add(B.g);
   const d=doorPos(e.car), sn=Math.sin(e.car.th), cs=Math.cos(e.car.th);
-  const k={B, x:d.x, z:d.z, th:e.car.th+Math.PI/2, v:0, st:mode==='push'?'push':'out', car:mode==='push'?null:e, t:0, shotT:rnd(0.8,1.6), outT:0, wp:null, fv:{x:cs*3.5, z:-sn*3.5}};
+  const k={B, hp:2, x:d.x, z:d.z, th:e.car.th+Math.PI/2, v:0, st:mode==='push'?'push':'out', car:mode==='push'?null:e, t:0, shotT:rnd(0.8,1.6), outT:0, wp:null, fv:{x:cs*3.5, z:-sn*3.5}};
   if (mode!=='push') e.out=k;
   COPS.push(k); return k;
 }
@@ -2995,7 +3105,7 @@ function copsUpdate(dt){
   for (let i=COPS.length-1;i>=0;i--){ const k=COPS[i], B=k.B;
     if (k.st==='dead'){ k.t+=dt; k.x+=k.fv.x*dt; k.z+=k.fv.z*dt; k.fv.x*=Math.exp(-3*dt); k.fv.z*=Math.exp(-3*dt); pushOutBlocks(k,0.3);
       B.fallK=Math.min(1,B.fallK+dt*3.5); posePerson(B,'idle',dt,0); placePerson(B,k);
-      if (k.t>8){ scene.remove(B.g); COPS.splice(i,1); } continue; }
+      if (k.t>30){ scene.remove(B.g); COPS.splice(i,1); } continue; }   // el cuerpo se queda 30 s
     if (k.st==='push'){ k.t+=dt; k.x+=k.fv.x*dt; k.z+=k.fv.z*dt; k.fv.x*=Math.exp(-4*dt); k.fv.z*=Math.exp(-4*dt); pushOutBlocks(k,0.3);
       B.fallK = k.t<0.35 ? k.t/0.35 : k.t<1.2 ? 1 : Math.max(0,1-(k.t-1.2)/0.5); posePerson(B,'idle',dt,0); placePerson(B,k);
       if (k.t>1.7){ k.st='out'; B.fallK=0; } continue; }
@@ -3067,7 +3177,19 @@ function parkedUpdate(h){
 }
 function footCamera(p, dt){
   const cam=p.camera, o=PED;
-  p.cam.yaw += angDiff(p.cam.yaw, o.dead ? p.cam.yaw+0.3 : o.th)*(1-Math.exp(-(o.dead?0.6:4)*dt));
+  if (!IS_MOBILE && !o.dead){   // cámara al hombro guiada por el ratón; al apuntar se acerca y cierra el ángulo
+    const ak=o.obj.aimK||0, yaw=p.cam.yaw, pt=p.cam.pitch||0, cp=Math.cos(pt);
+    const dx=Math.sin(yaw)*cp, dy=Math.sin(pt), dz=Math.cos(yaw)*cp, rx=-Math.cos(yaw), rz=Math.sin(yaw);
+    const off=lerp(0.62,0.85,ak), py=1.65, px=o.x+rx*off, pz=o.z+rz*off;
+    let dist=lerp(3.6,2.2,ak) + (o.sprint?0.5:0);
+    while (dist>0.5 && inBlock(px-dx*dist, pz-dz*dist)) dist-=0.25;   // no meter la cámara dentro de un edificio
+    _v1.set(px-dx*dist, Math.max(0.35, py-dy*dist), pz-dz*dist);
+    p.cam.pos.lerp(_v1, 1-Math.exp(-22*dt)); cam.position.copy(p.cam.pos);
+    cam.lookAt(px+dx*40, py+dy*40, pz+dz*40);
+    const fov=lerp(FOV0, FOV0*0.7, ak); if (Math.abs(cam.fov-fov)>0.05){ cam.fov=fov; cam.updateProjectionMatrix(); }
+    return;
+  }
+  p.cam.yaw +=angDiff(p.cam.yaw, o.dead ? p.cam.yaw+0.3 : o.th)*(1-Math.exp(-(o.dead?0.6:4)*dt));
   const dist = o.dead?5.5 : 3.4 + (o.sprint?0.8:0), hgt = o.dead?3.2:1.85;
   _v1.set(o.x - Math.sin(p.cam.yaw)*dist, hgt, o.z - Math.cos(p.cam.yaw)*dist);
   p.cam.pos.lerp(_v1, 1-Math.exp(-8*dt)); cam.position.copy(p.cam.pos);
@@ -3386,7 +3508,7 @@ function startRace(i){
   setMode(pendingMode);
   resume();
 }
-function pause(){ showMenu('pause'); }
+function pause(){ releaseMouse(); showMenu('pause'); }
 function resume(){ hideOverlays(); paused=false; menuState='play'; document.body.classList.remove('inmenu'); lastT=performance.now(); }
 $('pauseBtn').addEventListener('click', ()=>{ if (inMain()) return; paused ? resume() : pause(); });
 $('tBack').addEventListener('click', trackBack);
