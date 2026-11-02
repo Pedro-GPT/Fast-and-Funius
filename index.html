@@ -110,8 +110,37 @@ body.nitro #nitroFx{opacity:1}
 body.inmenu #nitroFx{display:none}
 #pHp.low{background:linear-gradient(90deg,#ff3b30,#ff7a4a)}
 #pHpTxt{font:700 16px var(--f-num);font-variant-numeric:tabular-nums;min-width:52px;text-align:right}
-#pmapWrap{position:absolute;left:var(--gl);bottom:var(--bot);width:180px;height:180px;border-radius:50%;padding:0;overflow:hidden;border:2px solid rgba(255,255,255,.25)}
-#pmap{width:100%;height:100%;display:block}
+#pmapWrap,#pmapWrap2{position:absolute;left:var(--gl);bottom:var(--bot);width:180px;height:180px;border-radius:50%;padding:0;overflow:hidden;border:2px solid rgba(255,255,255,.25)}
+#pmap,#pmap2{width:100%;height:100%;display:block}
+/* POLICE a dos jugadores: cada mitad lleva su vida, su nitro y su minimapa */
+#pmapWrap2,.pv .pstat,.pv .outFx{display:none}
+body.police.mode2 #pmapWrap,body.police.mode2 #pmapWrap2{width:140px;height:140px}
+body.police.mode2 #pmapWrap{left:calc(50% - 140px - var(--gr))}
+body.police.mode2 #pmapWrap2{display:block;left:calc(50% + var(--gl))}
+body.police.mode2 #phudTop .hpRow{display:none}
+body.police.mode2 .pv .pstat{display:grid;position:absolute;top:var(--top);right:var(--gr);min-width:200px;padding:10px 14px 12px;gap:8px;transition:box-shadow .15s}
+body.police.mode2 .pv.side-l .pstat{right:auto;left:var(--gl);top:calc(var(--top) + 84px)}
+.pstat .php{height:100%;width:100%;background:linear-gradient(90deg,#3ccf6a,#8ee05a);transition:width .2s}
+.pstat .php.low{background:linear-gradient(90deg,#ff3b30,#ff7a4a)}
+.pstat .pnit{height:100%;width:100%;background:linear-gradient(90deg,#2a7bff,#6fd0ff);transition:width .1s}
+.pstat .pnit.on{box-shadow:0 0 10px #6fd0ff}
+.pstat .num{font:700 16px var(--f-num);font-variant-numeric:tabular-nums;min-width:52px;text-align:right}
+.pv.out .outFx{display:flex;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;backdrop-filter:grayscale(1) brightness(.8);-webkit-backdrop-filter:grayscale(1) brightness(.8)}
+.outFx b{font:800 44px var(--f-num);letter-spacing:.06em;color:#ff3b30;text-shadow:0 2px 16px rgba(0,0,0,.7)}
+.outFx small{font:600 16px var(--f-ui);color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.8);max-width:80%}
+body.mode2 #xhair{left:25%}
+body.mode2 #footHint{left:25%}
+body.mode2.armed #ammo{right:calc(50% + 16px)}
+#garageUI.split{inset:auto;top:0;bottom:0;width:50%}
+#garageUI.split.half-l{left:0}
+#garageUI.split.half-r{left:50%}
+#garageUI.split .gInfo{max-width:22vw}
+#garageUI.split.half-r .gTop{left:calc(var(--gl) + 64px)}
+#garageUI.split.half-l .gInfo{right:calc(var(--gr) + 64px)}
+#garageUI.split .gInfo h2,#garageUI.split .gTitle{font-size:26px}
+.pv.ingar .pstat,.pv.ingar .speedo,body.gar1 #pmapWrap,body.gar2 #pmapWrap2,body.gar1 #phudTop{display:none!important}
+#gRescue{display:none}
+#garageUI.rescue #gRescue{display:inline-block}
 #xhair,#ammo{display:none}
 body.armed #xhair{display:block;position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;transition:width .12s,height .12s,margin .12s}
 #xhair::before,#xhair::after{content:'';position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 2px rgba(0,0,0,.8)}
@@ -265,6 +294,7 @@ body.mobile.portrait #rotate{display:grid}
     <div class="hpRow"><span class="lbl">Nitro</span><div class="hpBar"><div id="pNit"></div></div><span id="pNitTxt">100 %</span></div>
   </div>
   <div class="panel" id="pmapWrap"><canvas id="pmap" width="320" height="320"></canvas></div>
+  <div class="panel" id="pmapWrap2"><canvas id="pmap2" width="320" height="320"></canvas></div>
   <div id="pStars" aria-label="Nivel de búsqueda"></div>
   <div id="pStarsR" class="red" aria-label="Nivel de búsqueda rojo" hidden></div>
   <div id="pWarn" hidden>¡BLOQUEADO!<small id="pWarnT">3.0 s</small></div>
@@ -293,7 +323,7 @@ body.mobile.portrait #rotate{display:grid}
   <div class="gHint">Arrastra para girar el coche · flechas para cambiar de modelo</div>
   <div class="gBottom">
     <div class="swatches" id="swatches"></div>
-    <div class="gBtns"><button id="gBack" type="button">Volver</button><button id="gPick" class="primary" type="button">Elegir este coche</button></div>
+    <div class="gBtns"><button id="gBack" type="button">Volver</button><button id="gRescue" type="button"></button><button id="gPick" class="primary" type="button">Elegir este coche</button></div>
   </div>
 </div>
 
@@ -1600,11 +1630,17 @@ function makeHud(){
     <div class="gearrow"><span class="gear">N</span><div class="rev"><div class="revfill"></div></div></div>
   </div>
   <div class="toast"></div>
+  <div class="panel pstat">
+    <div class="hpRow"><span class="lbl hpLbl">Vida</span><div class="hpBar"><div class="php"></div></div><span class="num hpTxt">20 / 20</span></div>
+    <div class="hpRow"><span class="lbl">Nitro</span><div class="hpBar"><div class="pnit"></div></div><span class="num nitTxt">100 %</span></div>
+  </div>
+  <div class="outFx"><b>ATRAPADO</b><small>Tu compañero puede rescatarte en el garaje por 50 oro</small></div>
   <button class="wreckBtn" type="button" hidden>Reiniciar</button>`;
   $('views').appendChild(v);
   const q=s=>v.querySelector(s);
   const wb=q('.wreckBtn'); wb.addEventListener('click',()=>{ if (!paused) resetOnTrack(); });
-  return {v, wreck:wb, who:q('.whoTxt'), lap:q('.lapnum'), cur:q('.cur'), last:q('.last'), best:q('.best'), kmh:q('.kmh'), gear:q('.gear'), rev:q('.revfill'), toast:q('.toast'), toastT:0, cache:{}};
+  return {v, wreck:wb, who:q('.whoTxt'), lap:q('.lapnum'), cur:q('.cur'), last:q('.last'), best:q('.best'), kmh:q('.kmh'), gear:q('.gear'), rev:q('.revfill'), toast:q('.toast'), toastT:0, cache:{},
+    box:q('.pstat'), hpLbl:q('.hpLbl'), hp:q('.php'), hpTxt:q('.hpTxt'), nit:q('.pnit'), nitTxt:q('.nitTxt')};
 }
 function makePlayer(id){
   const sel = {model:1, color: id===0 ? '#f2b800' : '#1d5fd1'};
@@ -1996,6 +2032,7 @@ const keys = {}; const touch = {gas:0,brake:0,hb:0,steer:0,nitro:0};
 const GAME_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD','KeyR','KeyE','KeyM','KeyP','KeyF','ShiftLeft','ShiftRight'];
 addEventListener('keydown', e=>{
   if (GAME_KEYS.includes(e.code) && menuState!=='title' && menuState!=='mode') e.preventDefault();
+  if (e.code==='Enter' && policeMode && !paused) e.preventDefault();   // Enter es la tecla de bajar/subir del J2: que no pulse botones
   keys[e.code]=true;
   if (e.repeat) return;
   if (menuState==='garage'){
@@ -2008,8 +2045,19 @@ addEventListener('keydown', e=>{
   if (menuState==='track'){ if (e.code==='Escape') trackBack(); return; }
   if ((e.code==='KeyP' || e.code==='Escape') && !inMain()){ paused ? resume() : pause(); return; }
   if (e.code==='KeyR' && !paused && !policeMode) resetOnTrack();
-  if (e.code==='KeyF' && !paused && policeMode) toggleFoot();
-  if (e.code==='KeyE' && !paused && policeMode && PS.foot) pickGun();
+  if (policeMode && !paused){
+    if (GSPLIT){   // garaje en media pantalla: solo responde a las teclas de quien está dentro
+      const j1=GSPLIT.id===0, c=e.code;
+      if (c===(j1?'KeyA':'ArrowLeft')){ changeCar(-1); return; }
+      if (c===(j1?'KeyD':'ArrowRight')){ changeCar(1); return; }
+      if (c===(j1?'Space':'ShiftRight')){ garagePick(); return; }
+      if (c===(j1?'KeyS':'ArrowDown')){ garageRescue(); return; }
+      if (c===(j1?'KeyF':'Enter')){ garageBack(); return; }
+    }
+    if (e.code==='KeyF' && !players[0].ps.garIn){ bindP(players[0]); toggleFoot(); }
+    if (e.code==='Enter' && RUN.n===2 && !players[1].ps.garIn){ bindP(players[1]); toggleFoot(); bindP(players[0]); }
+    if (e.code==='KeyE'){ bindP(players[0]); if (PS.foot) pickGun(); }
+  }
 });
 addEventListener('keyup', e=>{ keys[e.code]=false; });
 // ---- Panel de ajuste del derrape POLICE (tecla T) ----
@@ -2056,7 +2104,8 @@ function readInput(p, dt){
   const kst=(lf?1:0)-(rt?1:0);
   p.inp.steer = live ? (kst || t.steer) : 0;
   p.inp.hb = live && !!hb;
-  if (policeMode && p.id===0){ p.inp.hb = live && (any(['KeyE','KeyM'])); p.nitroKey = live && (!!keys['Space'] || !!touch.nitro); }   // POLICE: espacio = nitro
+  if (policeMode){ p.inp.hb = false;   // POLICE: sin freno de mano; nitro con Espacio (J1) o Shift derecho (J2)
+    p.nitroKey = live && (p.id===0 ? (!!keys['Space'] || !!touch.nitro) : !!keys['ShiftRight']); }
 }
 
 // ---------- Marcas de neumático ----------
@@ -2215,13 +2264,19 @@ const CITY = {G:10, PITCH:90, SW:20};             // 10×10 manzanas, calles de 
 CITY.SIZE = CITY.G*CITY.PITCH;
 const PRICES = [100, 200, 0, 450, 50, 300, 1000, 1200];   // por índice de MODELS (Kreisel 9 = básico, gratis)
 const PSTATS = i => { const s=MODELS[i]; return s.bike ? {hp:20, t170:'2,0'} : s.scan ? {hp:30, t170:'2,3'} : {hp:20, t170:'5,7'}; };
-const PSAVE = (()=>{ const d={gold:0, unlocked:[2], best:0, sel:{model:2, color:'#1d5fd1'}};
+const PSAVE = (()=>{ const d={gold:0, unlocked:[2], best:0, sel:{model:2, color:'#1d5fd1'}, sel2:{model:2, color:'#f2b800'}};
   try{ const r=JSON.parse(localStorage.getItem('faf_police')||'null'); if (r && typeof r==='object') Object.assign(d, r); }catch(_){}
   if (!d.unlocked.includes(2)) d.unlocked.push(2); return d; })();
 function psave(){ try{ localStorage.setItem('faf_police', JSON.stringify(PSAVE)); }catch(_){} }
 const isUnlocked = i => PSAVE.unlocked.includes(i);
 let policeMode=false, cityGroup=null;
-const PS = {t:0, hp:20, maxHp:20, goldRun:0, ns:25, iv:25, bagT:18, block:0, over:false, flash:0, bTouch:false};
+// Estado de la partida POLICE. RUN es común a los dos jugadores; cada jugador tiene su PS (vida, nitro, a pie…),
+// que hereda de PSHARED los campos comunes (tiempo, estrellas, bolsas). PS, PED y CUR apuntan al jugador que se está procesando (bindP).
+const RUN = {t:0, goldRun:0, ns:25, iv:25, bagT:18, lvl:1, red:0, t5:0, isBest:false, overT:0, stillT:0, over:false, reason:'', n:1};
+const PSHARED = {};
+for (const k of ['t','goldRun','ns','iv','bagT','lvl','red','t5','isBest','overT','stillT']) Object.defineProperty(PSHARED, k, {get(){ return RUN[k]; }, set(v){ RUN[k]=v; }});
+const newPS = () => Object.assign(Object.create(PSHARED), {hp:20, maxHp:20, block:0, over:false, flash:0, nitro:1, nitroOn:false, foot:false, reason:'', garArmed:false, garRun:false, garWarnT:0, garIn:false});
+let PS = newPS();
 const POL=[], BAGS=[];
 const nodeX = i => i*CITY.PITCH;
 const clampNode = i => clamp(i,0,CITY.G);
@@ -2416,9 +2471,10 @@ function addLightbar(o, kind){
   return [red, blue];
 }
 function spawnPolice(kind){
-  const pl=players[0].car, pn=[clampNode(Math.round(pl.x/CITY.PITCH)), clampNode(Math.round(pl.z/CITY.PITCH))];
+  const pls=active.map(p=>p.car), pl=pls[0];   // aparece lejos de todos los jugadores
+  const far=(ni,nj)=>pls.every(c=>{ const pn=[clampNode(Math.round(c.x/CITY.PITCH)), clampNode(Math.round(c.z/CITY.PITCH))]; return Math.abs(ni-pn[0])+Math.abs(nj-pn[1])>=4 && Math.hypot(nodeX(ni)-c.x,nodeX(nj)-c.z)>=220; });
   let ni=0, nj=0, tries=0;
-  do { ni=Math.random()*(CITY.G+1)|0; nj=Math.random()*(CITY.G+1)|0; tries++; } while ((Math.abs(ni-pn[0])+Math.abs(nj-pn[1])<4 || Math.hypot(nodeX(ni)-pl.x,nodeX(nj)-pl.z)<220) && tries<200);
+  do { ni=Math.random()*(CITY.G+1)|0; nj=Math.random()*(CITY.G+1)|0; tries++; } while (!far(ni,nj) && tries<200);
   const m=policeIdx(kind), spec=MODELS[m];
   const obj=buildCar(m, '#111317', scene); policeLivery(obj, kind);
   const lights=addLightbar(obj, kind);
@@ -2443,12 +2499,12 @@ function policeExplode(e){
     debris.push({m, owner:'pol', g:0, r:0.15, v:new THREE.Vector3(vx+rnd(-8,8), rnd(5,12), vz+rnd(-8,8)), av:new THREE.Vector3(rnd(-8,8),rnd(-8,8),rnd(-8,8)), rest:false}); }
   for (let i=0;i<45*PQ;i++) spawn(FIRE,{x:c.x+rnd(-1,1),y:rnd(0.3,1.3),z:c.z+rnd(-1,1),vx:rnd(-7,7),vy:rnd(2,10),vz:rnd(-7,7),life:rnd(0.45,1.1),s0:1.6,s1:5.5,a:1,c0:0xffd27a,c1:0xff3000,drag:0.9});
   for (let i=0;i<25*PQ;i++) spawn(SMOKE,{x:c.x+rnd(-1.5,1.5),y:rnd(0.5,2),z:c.z+rnd(-1.5,1.5),vx:rnd(-4,4),vy:rnd(2,6),vz:rnd(-4,4),life:rnd(2.5,4.5),s0:2,s1:11,a:0.7,c0:0x2a2622,c1:0x6a6560,drag:0.95,fadeIn:true});
-  players[0].hit=Math.max(players[0].hit,0.6);
+  for (const p of active) if (Math.hypot(p.car.x-c.x,p.car.z-c.z)<60) p.hit=Math.max(p.hit,0.6);
 }
 function clearPolice(){ for (const e of POL) disposeCar(e.obj); POL.length=0; }
 function manh(a,b){ return Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1]); }
 function aiWaypoint(e){
-  const c=e.car, pl=(PS.foot&&!PED.dead)?PED:players[0].car, P_=CITY.PITCH;
+  const c=e.car, pl=e.tgt ? tgtObj(e.tgt) : players[0].car, P_=CITY.PITCH;
   const dist=Math.hypot(pl.x-c.x, pl.z-c.z);
   const L=PS.lvl||1;
   let lead = e.role==='cut' ? 2.6 : clamp(dist/70,0,1.2)*(1-0.12*(L-1));
@@ -2487,11 +2543,13 @@ function aiWaypoint(e){
 }
 function aiControl(e, dt){
   const c=e.car, inp=e.inp, v=Math.hypot(c.vx,c.vz);
+  const tp=e.tgt, onFoot = tp && tp.ps.foot && !tp.ped.dead, PD = tp ? tp.ped : null;   // jugador al que persigue
+  if (!tp){ inp.thr=0; inp.brk=v>0.5?1:0; inp.steer=0; return; }
   e.ramCD=Math.max(0,e.ramCD-dt); e.touchT=Math.max(0,e.touchT-dt); e.bTouch=Math.max(0,(e.bTouch||0)-dt);
   e.thinkT-=dt; if (e.thinkT<=0 || !e.wp){ e.thinkT=0.25; e.wp=aiWaypoint(e); }
   const wp=e.wp, dx=wp.x-c.x, dz=wp.z-c.z, dist=Math.hypot(dx,dz);
   const err=angDiff(c.th, Math.atan2(dx,dz));
-  if (e.revT>0 && PS.foot && !PED.dead && Math.hypot(PED.x-c.x,PED.z-c.z)<25) e.revT=0;   // no da marcha atrás encima del prisionero
+  if (e.revT>0 && onFoot && Math.hypot(PD.x-c.x,PD.z-c.z)<25) e.revT=0;   // no da marcha atrás encima del prisionero
   if (e.revT>0){ e.revT-=dt; inp.thr=0; inp.brk=1; inp.steer=-clamp(err*2,-1,1); return; }
   if (v<1.2 && inp.thr>0.5 && e.parkT<=0) e.stuckT+=dt; else e.stuckT=Math.max(0,e.stuckT-dt);
   if (e.stuckT>1.3){ e.stuckT=0; e.revT=1.1; return; }
@@ -2502,12 +2560,12 @@ function aiControl(e, dt){
   }
   inp.steer=clamp(err*2.4,-1,1);
   let vt=e.vmax*WANT.vk[(PS.lvl||1)-1];
-  if (PS.foot && !PED.dead){ const d=Math.hypot(PED.x-c.x,PED.z-c.z); if (d<80) vt=Math.min(vt, Math.sqrt(2*7*Math.max(0,d-13))); }   // frena a tiempo para pararse a ~13 m del prisionero
+  if (onFoot){ const d=Math.hypot(PD.x-c.x,PD.z-c.z); if (d<80) vt=Math.min(vt, Math.sqrt(2*7*Math.max(0,d-13))); }   // frena a tiempo para pararse a ~13 m del prisionero
   if (!wp.direct && wp.turn) vt=Math.min(vt, Math.sqrt(13*13 + 2*9*Math.max(0,dist-10)));
   if (Math.abs(err)>0.6) vt=Math.min(vt, 12);
   if (Math.abs(err)>1.4) vt=Math.min(vt, 7);
   inp.thr = v<vt ? 1 : 0; inp.brk = v>vt+2.5 ? 1 : 0;
-  if (PS.foot && !PED.dead){ const d=Math.hypot(PED.x-c.x,PED.z-c.z); if (d<80){ inp.brk = v>vt+0.3 ? 1 : 0; if (d<13){ inp.thr=0; inp.brk=1; } } }   // ante el prisionero a pie: frenan para bajarse
+  if (onFoot){ const d=Math.hypot(PD.x-c.x,PD.z-c.z); if (d<80){ inp.brk = v>vt+0.3 ? 1 : 0; if (d<13){ inp.thr=0; inp.brk=1; } } }   // ante el prisionero a pie: frenan para bajarse
 }
 // ---------- Bolsas de dinero ----------
 let bagGeo=null, bagMat=null, bagBand=null, ringMat=null;
@@ -2518,9 +2576,9 @@ function spawnBag(){
     bagBand=new THREE.MeshStandardMaterial({color:0xf2c21a, metalness:0.8, roughness:0.25, emissive:0x553c00, emissiveIntensity:0.6});
     ringMat=new THREE.MeshBasicMaterial({color:0xffd23a, transparent:true, opacity:0.55, depthWrite:false});
   }
-  const pl=players[0].car; let x=0,z=0,t=0;
+  let x=0,z=0,t=0;
   do { const k=Math.random()*(CITY.G+1)|0, s=rnd(CITY.SW, CITY.SIZE-CITY.SW), along=Math.random()<0.5, lat=rnd(-CITY.SW*0.3,CITY.SW*0.3);
-       x = along ? s : nodeX(k)+lat; z = along ? nodeX(k)+lat : s; t++; } while (Math.hypot(x-pl.x,z-pl.z)<70 && t<50);
+       x = along ? s : nodeX(k)+lat; z = along ? nodeX(k)+lat : s; t++; } while (active.some(p=>Math.hypot(x-p.car.x,z-p.car.z)<70) && t<50);
   const g=new THREE.Group(); g.position.set(x,0,z);
   const b=new THREE.Mesh(bagGeo,bagMat); b.scale.setScalar(0.9); b.castShadow=true; g.add(b);
   const band=new THREE.Mesh(new THREE.TorusGeometry(0.17,0.04,8,16), bagBand); band.rotation.x=Math.PI/2; band.position.y=0.83; g.add(band);
@@ -2552,46 +2610,76 @@ function topSpeed(c0){   // velocidad punta en recta del vehículo elegido (refe
   let v=0; for (let i=0;i<60*45;i++){ simStep(s, inp, false, 1/60); const nv=s.vz; if (i>600 && nv-v<1e-4) break; v=nv; }
   return Math.max(30, Math.hypot(s.vx,s.vz));
 }
-function startPolice(){
+function startPolice(n){
+  n = n || RUN.n || 1; if (IS_MOBILE) n=1;
   buildCity(); policeMode=true; document.body.classList.add('police');
   trackGroup.visible=false; cityGroup.visible=true; setCityEnv();
-  clearDebris(); clearPolice(); clearBags();
-  footReset(); homeCar(players[0]); riderVis(players[0],true);
-  players[0].sel={model:PSAVE.sel.model, color:PSAVE.sel.color};
-  mode=1; active=[players[0]]; players[0].keys=KEYSETS.solo;
-  applySelection(players[0]); players[1].obj.g.visible=false; layout();
-  const p=players[0], spec=MODELS[p.obj.model];
-  repair(p);
-  p.car.city = 1;
-  p.car.boostA = spec.bike?16 : spec.scan?13 : 0; p.car.boostP = spec.bike?900 : spec.scan?600 : 0;
-  PS.maxHp = spec.scan?30:20; PS.hp=PS.maxHp; PS.t=0; PS.goldRun=0; PS.iv=35; PS.ns=PS.iv; PS.bagT=18; PS.block=0; PS.over=false; PS.nitro=1; PS.nitroOn=false; PS.lvl=1; PS.red=0; PS.t5=0; p.nitroK=0; p.nitroKey=false; p.inp.nitro=false; document.body.classList.remove('nitro'); starsHud(0); starsRedHud(0);
-  placeCity(p, 0, 0, Math.PI/2); garageExit(p); GAR.run=false;
-  p.hit=0; p.dmg=0;
+  clearDebris(); clearPolice(); clearBags(); closeSplitGarage();
+  footReset();
+  Object.assign(RUN, {n, t:0, goldRun:0, iv:35, ns:35, bagT:18, lvl:1, red:0, t5:0, over:false, reason:'', isBest:false, overT:0, stillT:0});
+  mode=n; active=players.slice(0,n);
+  players[0].keys = n===1 ? KEYSETS.solo : KEYSETS.wasd; players[1].keys = KEYSETS.arrows;
+  players[0].hud.who.textContent = n===1 ? 'Jugador' : 'J1 · WASD';
+  players[1].hud.who.textContent = 'J2 · flechas';
+  for (const p of players){ homeCar(p); riderVis(p,true); }
+  for (const p of active){ p.sel={...selOf(p)}; applySelection(p); }
+  players[1].obj.g.visible = n===2; layout();
+  for (const p of active){
+    bindP(p); repair(p); p.wrecked=false; p.obj.g.visible=true;
+    Object.assign(PS, {block:0, over:false, flash:0, nitro:1, nitroOn:false, foot:false, reason:'', garArmed:false, garRun:false, garWarnT:0, garIn:false});
+    policeCarSetup(p);
+    p.nitroK=0; p.nitroKey=false; p.inp.nitro=false; p.hit=0; p.dmg=0; p.bTouch=0;
+    p.hud.v.classList.remove('out');
+    placeCity(p, 0, 0, Math.PI/2); garageExit(p);
+  }
+  bindP(players[0]);
+  document.body.classList.remove('nitro'); starsHud(0); starsRedHud(0);
   skidCount=0; skidHead=0; skidGeo.setDrawRange(0,0);
   for (const pool of [SMOKE,FIRE]) for (const it of pool.items) it.s.visible=false;
-  p.car.vTop = topSpeed(p.car);
-  for (let k=0;k<3;k++) spawnPolice('patrol');   // la persecución empieza con 3 patrullas
+  for (let k=0;k<3*n;k++) spawnPolice('patrol');   // la persecución empieza con 3 patrullas por jugador
   for (let k=0;k<3;k++) spawnBag();
-  updateCarVisual(p,0); snapCam(p); updateCamera(p,0.016);
+  for (const p of active){ updateCarVisual(p,0); snapCam(p); updateCamera(p,0.016); }
   $('pWarn').hidden=true; clearCaughtFx();
   resume();
 }
 function exitPolice(){
   if (!policeMode) return;
-  document.body.classList.remove('nitro'); players[0].nitroK=0; players[0].inp.nitro=false; players[0].car.vTop=0; SFX.nitroHiss(false);
+  closeSplitGarage();
+  document.body.classList.remove('nitro'); SFX.nitroHiss(false);
+  for (const p of players){ p.nitroK=0; p.inp.nitro=false; p.car.vTop=0; p.hud.v.classList.remove('out'); }
   policeMode=false; document.body.classList.remove('police'); clearCaughtFx(); SFX.stopSirens();
   clearPolice(); clearBags(); clearDebris();
   if (cityGroup) cityGroup.visible=false; trackGroup.visible=true; setTrackEnv();
-  players[0].car.boostA=0; players[0].car.boostP=0; players[0].car.city=0;
-  footReset(); riderVis(players[0],true); homeCar(players[0]); applySelection(players[0]);
+  footReset();
+  for (const p of players){ p.car.boostA=0; p.car.boostP=0; p.car.city=0; riderVis(p,true); homeCar(p); applySelection(p); }
+  bindP(players[0]);
 }
-function caught(reason){
-  if (PS.over) return; PS.over=true;
-  const isBest = PS.t > (PSAVE.best||0); if (isBest) PSAVE.best = PS.t; psave();
-  PS.reason=reason; PS.isBest=isBest; PS.overT=0; PS.stillT=0;
+function caught(reason){   // pillan al jugador activo (CUR); la partida acaba cuando no queda ninguno
+  if (PS.over) return; PS.over=true; PS.reason=reason; RUN.reason=reason;
   // el golpe final hace girar el coche
-  const c=players[0].car, v=Math.hypot(c.vx,c.vz); if (reason==='vida') c.w += (Math.random()<0.5?-1:1)*clamp(1.5+v*0.08,1.5,5);
+  const p=CUR, c=p.car, v=Math.hypot(c.vx,c.vz); if (reason==='vida' && !PS.foot) c.w += (Math.random()<0.5?-1:1)*clamp(1.5+v*0.08,1.5,5);
+  if (p.id===0){ PED.aim=false; releaseMouse(); footHud(); }
+  if (alive().length){   // a dos jugadores: el otro sigue; su mitad se queda en blanco y negro
+    p.hud.v.classList.add('out');
+    for (const q of alive()) toastP(q,'¡Han pillado a J'+(p.id+1)+'! · Rescátalo en el garaje (50 oro)','bad',3);
+    return;
+  }
+  RUN.over=true;
+  const isBest = RUN.t > (PSAVE.best||0); if (isBest) PSAVE.best = RUN.t; psave();
+  RUN.isBest=isBest; RUN.overT=0; RUN.stillT=0;
+  for (const q of active) q.hud.v.classList.remove('out');
   $('game').classList.add('caughtFx'); $('pWarn').hidden=true;
+}
+const RESCUE_PRICE = 50;
+function rescue(p){   // el compañero vuelve a la partida saliendo del garaje, con el coche reparado
+  const pc=CUR; bindP(p);
+  footResetP(p); syncFootClass();
+  const sel=selOf(p); if (p.car!==p.homeCar){ p.car=freshCar(); p.homeCar=null; }   // si iba en un coche robado, ese se queda donde está
+  homeCar(p); p.sel={...sel}; applySelection(p); repair(p); p.wrecked=false; riderVis(p,true); p.obj.g.visible=true;
+  Object.assign(PS, {over:false, reason:'', block:0, flash:0, nitro:1, nitroOn:false, garArmed:false, garRun:false, garIn:false});
+  policeCarSetup(p); garageExit(p); p.hud.v.classList.remove('out');
+  toastP(p,'¡De vuelta a la calle!','good',2);
+  bindP(pc);
 }
 function ramDamage(e, vE){
   const v=vE*3.6;
@@ -2599,87 +2687,100 @@ function ramDamage(e, vE){
   return clamp(d,1,12);
 }
 function policeFrame(dt){
-  const p=players[0], c=p.car;
-  if (PS.foot){ holdStill(p.inp, c); c.steer=approach(c.steer,0,3*dt); pedControl(dt); }
-  else if (!PS.over){
-    readInput(p, dt);
-    if (p.obj.bike) bikeControl(p, dt);
-    else { const tgt=steerTarget(c, p.inp); c.steer=approach(c.steer, tgt, (Math.abs(tgt)<Math.abs(c.steer)?3.5:2.4)*dt); }
-  } else { p.inp.thr=0; p.inp.brk=c.vlong>0.5?1:0; p.inp.steer=0; p.inp.hb=true;   // frenar sin meter marcha atrás
-    const k=Math.exp(-0.9*dt); c.vx*=k; c.vz*=k; c.w=clamp(c.w,-4,4)*Math.exp(-0.8*dt); }
-  copsExit(dt);
-  for (const e of POL){ if (e.wrecked) continue; if (e.out || e.empty){ holdStill(e.inp, e.car); continue; } if (PS.over){ e.inp.thr=0; e.inp.brk=e.car.vlong>0.5?1:0; e.inp.hb=true; e.inp.steer=0; continue; } aiControl(e, dt); e.hitCD=Math.max(0,e.hitCD-dt); const t=steerTarget(e.car,e.inp); e.car.steer=approach(e.car.steer,t,(Math.abs(t)<Math.abs(e.car.steer)?3.5:2.4)*dt); }
-  p.bTouch=Math.max(0,(p.bTouch||0)-dt);
-  { const want=!PS.over && !PS.foot && p.nitroKey && !p.wrecked;
+  const two = RUN.n===2;
+  // --- mandos de cada jugador ---
+  for (const p of active){ bindP(p); const c=p.car;
+    if (PS.garIn){ holdStill(p.inp, c); p.inp.nitro=false; continue; }   // dentro del garaje (pantalla dividida)
+    if (PS.foot){ holdStill(p.inp, c); c.steer=approach(c.steer,0,3*dt); pedControl(dt); }
+    else if (!PS.over){
+      readInput(p, dt);
+      if (p.obj.bike) bikeControl(p, dt);
+      else { const tgt=steerTarget(c, p.inp); c.steer=approach(c.steer, tgt, (Math.abs(tgt)<Math.abs(c.steer)?3.5:2.4)*dt); }
+    } else { p.inp.thr=0; p.inp.brk=c.vlong>0.5?1:0; p.inp.steer=0; p.inp.hb=true;   // frenar sin meter marcha atrás
+      const k=Math.exp(-0.9*dt); c.vx*=k; c.vz*=k; c.w=clamp(c.w,-4,4)*Math.exp(-0.8*dt); }
+    p.bTouch=Math.max(0,(p.bTouch||0)-dt);
+    const want=!PS.over && !PS.foot && !PS.garIn && p.nitroKey && !p.wrecked;
     if (want && PS.nitro>0.01 && (PS.nitroOn || PS.nitro>0.06)){ if (!PS.nitroOn) SFX.nitro(); PS.nitroOn=true; PS.nitro=Math.max(0, PS.nitro-dt/3); }
     else { PS.nitroOn=false; PS.nitro=Math.min(1, PS.nitro+dt/30); }
     p.inp.nitro=PS.nitroOn; p.nitroK += ((PS.nitroOn?1:0)-p.nitroK)*Math.min(1, dt*(PS.nitroOn?6:2.5));
-    document.body.classList.toggle('nitro', PS.nitroOn); SFX.nitroHiss(PS.nitroOn);
     if (PS.nitroOn){ const sp=MODELS[p.obj.model], zr=(sp.ZR||-2.2)+0.05, sn=Math.sin(c.th), cs=Math.cos(c.th), xs = p.obj.bike?[0]:[-0.42,0.42];
       for (const lx of xs) for (let q=0;q<2;q++) if (Math.random()<60*PQ*dt){ const ex=c.x+cs*lx+sn*zr, ez=c.z-sn*lx+cs*zr;
-        spawn(FIRE,{x:ex,y:c.y+0.38,z:ez,vx:c.vx*0.6-sn*rnd(4,9),vy:rnd(0,0.6),vz:c.vz*0.6-cs*rnd(4,9),life:rnd(0.12,0.26),s0:0.45,s1:0.12,a:0.95,c0:0xbfe6ff,c1:0x1c48ff,drag:0.9}); } } }
+        spawn(FIRE,{x:ex,y:c.y+0.38,z:ez,vx:c.vx*0.6-sn*rnd(4,9),vy:rnd(0,0.6),vz:c.vz*0.6-cs*rnd(4,9),life:rnd(0.12,0.26),s0:0.45,s1:0.12,a:0.95,c0:0xbfe6ff,c1:0x1c48ff,drag:0.9}); } }
+  }
+  { const n0=!two && players[0].ps.nitroOn; document.body.classList.toggle('nitro', n0); SFX.nitroHiss(active.some(p=>p.ps.nitroOn)); }
+  // --- policía ---
+  copsExit(dt);
+  for (const e of POL){ if (e.wrecked) continue; if (e.out || e.empty){ holdStill(e.inp, e.car); continue; }
+    e.tgt = nearestTarget(e.car.x, e.car.z);
+    if (RUN.over || !e.tgt){ e.inp.thr=0; e.inp.brk=e.car.vlong>0.5?1:0; e.inp.hb=true; e.inp.steer=0; continue; }
+    aiControl(e, dt); e.hitCD=Math.max(0,e.hitCD-dt); const t=steerTarget(e.car,e.inp); e.car.steer=approach(e.car.steer,t,(Math.abs(t)<Math.abs(e.car.steer)?3.5:2.4)*dt); }
+  // --- física ---
   const n=Math.max(1,Math.ceil(dt/(1/240))), h=dt/n;
   for (let k=0;k<n;k++){
-    simStep(c, p.inp, false, h); cityCollide(p);
+    for (const p of active){ if (p.ps.garIn) continue; simStep(p.car, p.inp, false, h); cityCollide(p); }
     for (const e of POL){ if (e.wrecked) continue; simStep(e.car, e.inp, false, h); cityCollide(e); }
-    for (const e of POL){
-      const vE=e.car.vx*Math.sin(e.car.th)+e.car.vz*Math.cos(e.car.th);   // velocidad hacia delante de la policía ANTES del choque
-      const vP=c.vx*Math.sin(c.th)+c.vz*Math.cos(c.th);                     // mi velocidad hacia delante ANTES del choque
-      const r=collideCars(p, e);
-      if (r && e.wrecked) continue;
-      if (r){ e.touchT=0.3;
-        // golpe con el morro de la policía: la normal del choque apunta a lo largo de su eje (sea cual sea la zona de mi coche que reciba el golpe)
-        const ec=e.car, dF=-(r.nx*Math.sin(ec.th)+r.nz*Math.cos(ec.th));
-        if (!PS.over && !PS.foot && dF>0.55 && vE>100/3.6 && e.ramCD<=0){
-          e.ramCD=WANT.ram[PS.lvl-1]; const d=ramDamage(e, vE); PS.hp=Math.max(0,PS.hp-d); PS.flash=1; SFX.alert(); toastP(p,'−'+d+' vida','bad',1.2);
-          if (PS.hp<=0) caught('vida');
-        }
-        // mi morro contra cualquier parte de la policía que no sea su frontal, a más de 150 km/h: le quito vida
-        const pF=r.nx*Math.sin(c.th)+r.nz*Math.cos(c.th);
-        if (!PS.over && !PS.foot && pF>0.55 && dF<=0.55 && vP>150/3.6 && e.hitCD<=0){
-          e.hitCD=0.5; e.hp--;
-          const maxH = e.kind==='van'?4 : e.kind==='suv'?3 : 2;
-          if (e.hp<=0){ policeExplode(e); PS.hp=PS.maxHp;   // cada policía destruido rellena toda la vida
-            toastP(p, (e.kind==='van'?'¡Furgón eliminado!':e.kind==='suv'?'¡Todoterreno eliminado!':'¡Patrulla eliminada!')+' · vida al máximo','good',1.8); }
-          else toastP(p,'Golpe a la policía · '+(maxH-e.hp)+'/'+maxH,'good',1.2);
+    for (const p of active){ bindP(p); if (PS.garIn) continue; const c=p.car;
+      for (const e of POL){
+        const vE=e.car.vx*Math.sin(e.car.th)+e.car.vz*Math.cos(e.car.th);   // velocidad hacia delante de la policía ANTES del choque
+        const vP=c.vx*Math.sin(c.th)+c.vz*Math.cos(c.th);                     // mi velocidad hacia delante ANTES del choque
+        const r=collideCars(p, e);
+        if (r && e.wrecked) continue;
+        if (r){ e.touchT=0.3; e.touchP=p;
+          // golpe con el morro de la policía: la normal del choque apunta a lo largo de su eje (sea cual sea la zona de mi coche que reciba el golpe)
+          const ec=e.car, dF=-(r.nx*Math.sin(ec.th)+r.nz*Math.cos(ec.th));
+          if (!PS.over && !PS.foot && dF>0.55 && vE>100/3.6 && e.ramCD<=0){
+            e.ramCD=WANT.ram[PS.lvl-1]; const d=ramDamage(e, vE); PS.hp=Math.max(0,PS.hp-d); PS.flash=1; SFX.alert(); toastP(p,'−'+d+' vida','bad',1.2);
+            if (PS.hp<=0) caught('vida');
+          }
+          // mi morro contra cualquier parte de la policía que no sea su frontal, a más de 150 km/h: le quito vida
+          const pF=r.nx*Math.sin(c.th)+r.nz*Math.cos(c.th);
+          if (!PS.over && !PS.foot && pF>0.55 && dF<=0.55 && vP>150/3.6 && e.hitCD<=0){
+            e.hitCD=0.5; e.hp--;
+            const maxH = e.kind==='van'?4 : e.kind==='suv'?3 : 2;
+            if (e.hp<=0){ policeExplode(e); PS.hp=PS.maxHp;   // cada policía destruido rellena toda la vida
+              toastP(p, (e.kind==='van'?'¡Furgón eliminado!':e.kind==='suv'?'¡Todoterreno eliminado!':'¡Patrulla eliminada!')+' · vida al máximo','good',1.8); }
+            else toastP(p,'Golpe a la policía · '+(maxH-e.hp)+'/'+maxH,'good',1.2);
+          }
         }
       }
     }
+    if (two && !players[0].ps.garIn && !players[1].ps.garIn) collideCars(players[0], players[1]);
     for (let i=0;i<POL.length;i++) for (let j=i+1;j<POL.length;j++) collideCars(POL[i],POL[j]);
     parkedUpdate(h);
   }
   peopleVsCars(); copsUpdate(dt);
-  if (!PS.over && !PED.trans) garageCheck(dt);
-  if (!PS.over){
-    PS.t+=dt;
-    // bolsas
-    for (let i=BAGS.length-1;i>=0;i--){ const q=BAGS[i]; q.b.rotation.y+=dt*1.5; q.b.position.y=0.15+0.12*Math.sin(PS.t*3+i);
-      const me = PS.foot ? PED : c;
-      if (Math.hypot(q.x-me.x,q.z-me.z)<(PS.foot?1.6:3.4)){ scene.remove(q.g); BAGS.splice(i,1); PSAVE.gold+=10; PS.goldRun+=10; PS.nitro=Math.min(1,PS.nitro+0.3); psave(); toastP(p,'+10 oro','good',1.2); SFX.pickup(); } }
-    const bk=Math.pow(2,PS.red||0);   // cada estrella roja duplica las bolsas
-    PS.bagT-=dt; if (PS.bagT<=0){ PS.bagT=18/bk; if (BAGS.length<5*bk) spawnBag(); }
+  for (const p of active){ bindP(p); if (!PS.over && !PED.trans && !PS.garIn) garageCheck(dt); }
+  if (!RUN.over){
+    RUN.t+=dt;
+    // bolsas: las coge cualquiera de los dos; el oro es común
+    for (let i=BAGS.length-1;i>=0;i--){ const q=BAGS[i]; q.b.rotation.y+=dt*1.5; q.b.position.y=0.15+0.12*Math.sin(RUN.t*3+i);
+      for (const p of active){ const S=p.ps; if (S.over || S.garIn) continue; const me = S.foot ? p.ped : p.car;
+        if (Math.hypot(q.x-me.x,q.z-me.z)<(S.foot?1.6:3.4)){ scene.remove(q.g); BAGS.splice(i,1); PSAVE.gold+=10; RUN.goldRun+=10; S.nitro=Math.min(1,S.nitro+0.3); psave(); toastP(p,'+10 oro','good',1.2); SFX.pickup(); break; } } }
+    const bk=Math.pow(2,RUN.red||0);   // cada estrella roja duplica las bolsas
+    RUN.bagT-=dt; if (RUN.bagT<=0){ RUN.bagT=18/bk; if (BAGS.length<5*bk) spawnBag(); }
     // refuerzos, cada vez más seguidos
-    let L=1; while (L<5 && PS.t>=WANT.t[L]) L++;
-    if (L>PS.lvl){ PS.lvl=L; starsHud(L); if (L===5){ SFX.warn(); PS.t5=PS.t; starsRedHud(0); } else SFX.level();
+    let L=1; while (L<5 && RUN.t>=WANT.t[L]) L++;
+    if (L>RUN.lvl){ RUN.lvl=L; starsHud(L); if (L===5){ SFX.warn(); RUN.t5=RUN.t; starsRedHud(0); } else SFX.level();
       for (const e of POL) if (e.kind!=='van') e.role = Math.random()<WANT.cut[L-1] ? 'cut':'chase';
-      PS.ns=Math.min(PS.ns, 0.5); }
+      RUN.ns=Math.min(RUN.ns, 0.5); }
     // estrellas rojas: una cada 3 min desde la 5.ª amarilla; cada una trae 3 furgones blindados más
-    if (PS.lvl===5 && PS.red<5 && PS.t-PS.t5 >= 180*(PS.red+1)){ PS.red++; starsRedHud(PS.red); SFX.redLevel(); { const n=Math.min(BAGS.length, 5*Math.pow(2,PS.red)-BAGS.length); for (let k=0;k<n;k++) spawnBag(); } for (let k=0;k<3;k++) spawnPolice('van'); }
-    PS.ns-=dt;
-    const maxPol = (IS_MOBILE?WANT.maxM:WANT.max)[PS.lvl-1];
-    if (PS.ns<=0){ PS.ns=WANT.iv[PS.lvl-1];
+    if (RUN.lvl===5 && RUN.red<5 && RUN.t-RUN.t5 >= 180*(RUN.red+1)){ RUN.red++; starsRedHud(RUN.red); SFX.redLevel(); { const nb=Math.min(BAGS.length, 5*Math.pow(2,RUN.red)-BAGS.length); for (let k=0;k<nb;k++) spawnBag(); } for (let k=0;k<3;k++) spawnPolice('van'); }
+    RUN.ns-=dt;
+    const maxPol = Math.round((IS_MOBILE?WANT.maxM:WANT.max)[RUN.lvl-1]*(two?1.5:1));   // a dos jugadores, más policía
+    if (RUN.ns<=0){ RUN.ns=WANT.iv[RUN.lvl-1]*(two?0.75:1);
       if (POL.filter(e=>!e.wrecked).length<maxPol){ let kind='patrol';
-        if (PS.t>=300){ const r=Math.random(), vans=POL.filter(e=>e.kind==='van').length; kind = r<0.35 ? 'suv' : (r<0.55 && vans<3) ? 'van' : 'patrol'; }
-        spawnPolice(kind); toastP(p, kind==='suv'?'¡Todoterreno policial!':kind==='van'?'¡Furgón blindado!':'Refuerzos en camino', kind==='patrol'?'':'bad', 1.6); } }
+        if (RUN.t>=300){ const r=Math.random(), vans=POL.filter(e=>e.kind==='van').length; kind = r<0.35 ? 'suv' : (r<0.55 && vans<3) ? 'van' : 'patrol'; }
+        spawnPolice(kind); for (const p of alive()) toastP(p, kind==='suv'?'¡Todoterreno policial!':kind==='van'?'¡Furgón blindado!':'Refuerzos en camino', kind==='patrol'?'':'bad', 1.6); } }
     // bloqueo: rodeado y sin poder moverse
-    const v=Math.hypot(c.vx,c.vz), touching=POL.filter(e=>!e.wrecked && e.touchT>0).length;
-    const blocked = !PS.foot && v<1.5 && (touching>=2 || (touching>=1 && p.bTouch>0));
-    PS.block = blocked ? PS.block+dt : Math.max(0, PS.block-dt*2);
-    $('pWarn').hidden = PS.block<0.3;
-    if (PS.block>0.3) $('pWarnT').textContent = Math.max(0,3-PS.block).toFixed(1)+' s';
-    if (PS.block>=3) caught('bloqueo');
+    for (const p of active){ bindP(p); const c=p.car; if (PS.over || PS.garIn){ PS.block=0; continue; }
+      const v=Math.hypot(c.vx,c.vz), touching=POL.filter(e=>!e.wrecked && e.touchT>0 && (e.touchP||players[0])===p).length;
+      const blocked = !PS.foot && v<1.5 && (touching>=2 || (touching>=1 && p.bTouch>0));
+      PS.block = blocked ? PS.block+dt : Math.max(0, PS.block-dt*2);
+      if (two){ if (PS.block>0.3) toastP(p,'¡BLOQUEADO! '+Math.max(0,3-PS.block).toFixed(1)+' s','bad',0.2); }
+      else { $('pWarn').hidden = PS.block<0.3; if (PS.block>0.3) $('pWarnT').textContent = Math.max(0,3-PS.block).toFixed(1)+' s'; }
+      if (PS.block>=3) caught('bloqueo'); }
   }
-  effects(p,dt); updateCarVisual(p,dt);
+  for (const p of active){ effects(p,dt); updateCarVisual(p,dt); }
   for (const e of PARKED){ effects(e,dt); updateCarVisual(e,dt); }
   const fl=Math.floor(performance.now()/130)%2;
   for (let i=POL.length-1;i>=0;i--){ const e=POL[i];
@@ -2693,9 +2794,15 @@ function policeFrame(dt){
     effects(e,dt); updateCarVisual(e,dt); const on=!e.empty; e.lights[0].emissiveIntensity=on&&fl?3:0.3; e.lights[1].emissiveIntensity=on&&!fl?3:0.3; }
   if (skidDirty){ skidGeo.attributes.position.needsUpdate=true; skidGeo.setDrawRange(0, skidCount*6); skidDirty=false; }
   updatePool(SMOKE,dt); updatePool(FIRE,dt); updateDebris(dt);
-  if (PS.foot) footCamera(p,dt); else updateCamera(p,dt);
-  hud(p,dt); policeHud(dt); drawPoliceMap();
-  SFX.listen([{x:p.camera.position.x, z:p.camera.position.z, yaw:p.cam.yaw, base:0}]); if (!PS.foot) SFX.car(p,dt,0); SFX.sirens(POL);
+  // --- cámaras, marcadores y sonido ---
+  const bases = two ? [-1,1] : [0];
+  for (const p of active){ bindP(p); if (PS.foot) footCamera(p,dt); else updateCamera(p,dt); hud(p,dt); }
+  policeHud(dt); drawPoliceMap(players[0], pmap);
+  if (two) drawPoliceMap(players[1], $('pmap2'));
+  SFX.listen(active.map((p,i)=>({x:p.camera.position.x, z:p.camera.position.z, yaw:p.cam.yaw, base:bases[i]||0})));
+  active.forEach((p,i)=>{ if (!p.ps.foot && !p.ps.garIn) SFX.car(p, dt, (bases[i]||0)*0.6); });
+  SFX.sirens(POL);
+  bindP(players[0]);
 }
 // ================= A PIE (modo POLICE) =================
 // Prisionero (jugador) y policías a pie: modelos 3D hechos con primitivas, animación procedimental.
@@ -2885,64 +2992,82 @@ function pushOutCar(o, c, r){ const q=touchCar(c,o.x,o.z,r); if (!q) return fals
   o.x=c.x+cs*q.lx+sn*q.lz; o.z=c.z-sn*q.lx+cs*q.lz; return true; }
 function doorPos(c){ const lx=(c.hw||HWC)+0.55, lz=0.25, sn=Math.sin(c.th), cs=Math.cos(c.th); return {x:c.x+cs*lx+sn*lz, z:c.z-sn*lx+cs*lz}; }
 // --- estado ---
-const PED = {obj:null, x:0, z:0, th:0, v:0, vx:0, vz:0, hp:5, dead:false, trans:null, sprint:false, fallV:null, gun:false, ammo:0, aim:false, fireT:0, fireReq:false};
+const newPED = () => ({obj:null, x:0, z:0, th:0, v:0, vx:0, vz:0, hp:5, dead:false, trans:null, sprint:false, fallV:null, gun:false, ammo:0, aim:false, fireT:0, fireReq:false});
+let PED = newPED(), CUR = players[0];
+players[0].ps = PS; players[0].ped = PED; players[1].ps = newPS(); players[1].ped = newPED();
+function bindP(p){ CUR=p; PS=p.ps; PED=p.ped; }
+const alive = () => active.filter(p=>!p.ps.over);
+// objetivo de la policía: el jugador vivo más cercano que no esté dentro del garaje (a pie, su prisionero)
+function nearestTarget(x, z){ let best=null, bd=1e9; for (const p of active){ const s=p.ps; if (s.over || s.garIn) continue; const o=(s.foot && !p.ped.dead) ? p.ped : p.car; if (s.foot && p.ped.dead) continue; const d=Math.hypot(o.x-x,o.z-z); if (d<bd){ bd=d; best=p; } } return best; }
+const tgtObj = p => (p.ps.foot && !p.ped.dead) ? p.ped : p.car;
 const COPS = [], PARKED = [];
 function holdStill(inp, c){ inp.steer=0; inp.hb=false; inp.nitro=false; inp.brk = c.vlong>0.3 ? 1 : 0; inp.thr = c.vlong<-0.3 ? 1 : 0; }   // frenar sin meter marcha atrás
-function garageExit(p){   // coloca al jugador saliendo de la puerta del garaje
-  const c=p.car; c.x=GAR.sx; c.z=GAR.z; c.y=0; c.th=Math.PI/2; c.vx=c.vz=c.w=c.steer=c.ax=0; c.vlong=c.vlat=c.slipR=c.slipF=0; c.drOn=false; c.dA=0;
-  p.inp.thr=p.inp.brk=p.inp.steer=0; p.inp.nitro=false; PS.nitroOn=false; for (const w of p.obj.wheels) w.last=null; GAR.armed=false;
+const selOf = p => p.id===0 ? PSAVE.sel : PSAVE.sel2;
+function syncFootClass(){ document.body.classList.toggle('onfoot', policeMode && !!players[0].ps.foot); }
+function garageExit(p){   // coloca al jugador saliendo de la puerta del garaje (a dos jugadores, uno a cada lado)
+  const c=p.car; c.x=GAR.sx; c.z=GAR.z+(RUN.n===2 ? (p.id?3.2:-3.2) : 0); c.y=0; c.th=Math.PI/2; c.vx=c.vz=c.w=c.steer=c.ax=0; c.vlong=c.vlat=c.slipR=c.slipF=0; c.drOn=false; c.dA=0;
+  p.inp.thr=p.inp.brk=p.inp.steer=0; p.inp.nitro=false; p.ps.nitroOn=false; for (const w of p.obj.wheels) w.last=null; p.ps.garArmed=false;
   updateCarVisual(p,0); snapCam(p);
 }
 function garageCheck(dt){
-  const p=players[0], me = PS.foot ? PED : p.car, d=Math.hypot(me.x-(GAR.fx+0.5), me.z-GAR.z);
-  if (!GAR.armed){ if (d>14) GAR.armed=true; return; }
-  GAR.warnT=Math.max(0,GAR.warnT-dt);
+  const p=CUR, me = PS.foot ? PED : p.car, d=Math.hypot(me.x-(GAR.fx+0.5), me.z-GAR.z);
+  if (!PS.garArmed){ if (d>14) PS.garArmed=true; return; }
+  PS.garWarnT=Math.max(0,PS.garWarnT-dt);
   const inside = Math.abs(me.z-GAR.z)<GAR.pw && (PS.foot ? me.x<GAR.door-0.6 : me.x+(me.hl||HL)*0.4<GAR.door);   // ya dentro, en lo negro (unos dos tercios del coche)
   if (!inside || p.wrecked) return;
   let near=1e9; for (const e of POL) if (!e.wrecked) near=Math.min(near, Math.hypot(e.car.x-me.x,e.car.z-me.z));
   for (const k of COPS) if (k.st!=='dead') near=Math.min(near, Math.hypot(k.x-me.x,k.z-me.z));
-  if (near<90){ if (GAR.warnT<=0){ toastP(p,'La policía está demasiado cerca','bad',1.4); GAR.warnT=2; } return; }
-  GAR.run=true; PS.nitroOn=false; document.body.classList.remove('nitro'); SFX.nitroHiss(false);
-  openGarage(1,'police');
+  if (near<90){ if (PS.garWarnT<=0){ toastP(p,'La policía está demasiado cerca','bad',1.4); PS.garWarnT=2; } return; }
+  PS.nitroOn=false; p.inp.nitro=false; if (p.id===0){ document.body.classList.remove('nitro'); SFX.nitroHiss(false); }
+  if (RUN.n===2){ if (GSPLIT){ if (PS.garWarnT<=0){ toastP(p,'El garaje está ocupado','',1.4); PS.garWarnT=2; } return; } openSplitGarage(p); return; }
+  PS.garRun=true; openGarage(1,'police');
 }
 function garageSwap(){   // nuevo coche elegido en el garaje, sin perder la partida
-  const p=players[0];
+  const p=CUR, sel=selOf(p);
   if (PS.foot){ PARKED.push({obj:p.obj, car:p.car, inp:{thr:0,brk:1,steer:0,hb:false}, wrecked:p.wrecked, hit:0, dmg:0, dmgX:0, dmgZ:0, scratchT:0, id:'parked', vhp:PS.hp, vmax:PS.maxHp});
-    p.obj=buildCar(PSAVE.sel.model, PSAVE.sel.color, scene); p.homeCar=null; p.car=freshCar(); }
+    p.obj=buildCar(sel.model, sel.color, scene); p.homeCar=null; p.car=freshCar(); }
   else if (p.car!==p.homeCar){ p.car=freshCar(); p.homeCar=null; }
   homeCar(p);
-  p.sel={model:PSAVE.sel.model, color:PSAVE.sel.color}; applySelection(p); repair(p); p.wrecked=false; riderVis(p,true); p.obj.g.visible=true;
-  const spec=MODELS[p.obj.model], c=p.car;
-  c.city=1; c.boostA = spec.bike?16 : spec.scan?13 : 0; c.boostP = spec.bike?900 : spec.scan?600 : 0; c.vTop=topSpeed(c);
-  PS.maxHp=spec.scan?30:20; PS.hp=PS.maxHp;
-  PS.foot=false; PED.trans=null; if (PED.obj) PED.obj.g.visible=false; document.body.classList.remove('onfoot');
+  p.sel={model:sel.model, color:sel.color}; applySelection(p); repair(p); p.wrecked=false; riderVis(p,true); p.obj.g.visible=true;
+  policeCarSetup(p);
+  PS.foot=false; PED.trans=null; if (PED.obj) PED.obj.g.visible=false; syncFootClass();
   garageExit(p);
 }
+function policeCarSetup(p){   // ajustes del coche propio en POLICE: impulso extra, vida y velocidad punta
+  const spec=MODELS[p.obj.model], c=p.car;
+  c.city=1; c.boostA = spec.bike?16 : spec.scan?13 : 0; c.boostP = spec.bike?900 : spec.scan?600 : 0; c.vTop=topSpeed(c);
+  p.ps.maxHp=spec.scan?30:20; p.ps.hp=p.ps.maxHp;
+}
 function garageLeave(){   // salir del garaje sin cambiar de coche
-  const p=players[0];
-  if (PS.foot){ PED.x=GAR.fx+1.2; PED.z=GAR.z; PED.th=Math.PI/2; PED.v=0; GAR.armed=false; snapCam(p); }
+  const p=CUR;
+  if (PS.foot){ PED.x=GAR.fx+1.2; PED.z=GAR.z+(RUN.n===2 ? (p.id?2:-2) : 0); PED.th=Math.PI/2; PED.v=0; PS.garArmed=false; snapCam(p); }
   else garageExit(p);
 }
 function homeCar(p){ if (!p.homeCar) p.homeCar=p.car; p.car=p.homeCar; Object.assign(p.car, freshCar(), {drOn:false, dA:0, dBlock:false, vTop:0}); }   // vuelve al objeto de coche original del jugador
 function freshCar(){ return {x:0,y:0,z:0,th:0,vx:0,vz:0,w:0,steer:0,vlong:0,vlat:0,slipR:0,slipF:0,idx:0,grass:false,ax:0,pitch:0}; }
+function footResetP(p){   // vuelve a meter al prisionero de un jugador en su coche
+  const s=p.ps, d=p.ped;
+  s.foot=false; d.dead=false; d.trans=null; d.hp=5; d.gun=false; d.ammo=0; d.aim=false; d.fireReq=false;
+  if (d.obj){ d.obj.g.visible=false; d.obj.fallK=0; d.obj.aimK=0; d.obj.gun.visible=false; }
+}
 function footReset(){
-  PS.foot=false; PED.dead=false; PED.trans=null; PED.hp=5; PED.gun=false; PED.ammo=0; PED.aim=false; releaseMouse(); footHud();
-  if (PED.obj){ PED.obj.g.visible=false; PED.obj.fallK=0; PED.obj.aimK=0; PED.obj.gun.visible=false; }
+  for (const p of players) footResetP(p);
+  releaseMouse(); footHud();
   for (const k of COPS) scene.remove(k.B.g); COPS.length=0;
   for (const e of PARKED) disposeCar(e.obj); PARKED.length=0;
   for (const t of TRACERS) t.visible=false;
-  document.body.classList.remove('onfoot');
+  syncFootClass();
 }
 function riderVis(p, v){ if (p.obj.rider) p.obj.rider.group.visible=v; }
 function nearVehicle(){
-  const p=players[0]; let best=null, bd=1e9;
+  const p=CUR; let best=null, bd=1e9;
   const test=(ent)=>{ if (!ent || ent.wrecked) return; const c=ent.car; const q=carLocal(c,PED.x,PED.z); const d=Math.max(0,Math.abs(q.lx)-(c.hw||HWC))+Math.max(0,Math.abs(q.lz)-(c.hl||HL)); if (d<1.6 && d<bd){ bd=d; best=ent; } };
   test(p); for (const e of PARKED) test(e); for (const e of POL) test(e);
   return best;
 }
 function toggleFoot(){
-  if (!policeMode || paused || PS.over || PED.trans || PED.dead) return;
-  const p=players[0], c=p.car;
+  if (!policeMode || paused || PS.over || PS.garIn || PED.trans || PED.dead) return;
+  const p=CUR, c=p.car;
   if (!PS.foot){
     if (p.wrecked) return;
     if (Math.hypot(c.vx,c.vz) > 30/3.6){ toastP(p,'Frena para salir','',1.0); return; }
@@ -2951,14 +3076,14 @@ function toggleFoot(){
     PED.hp=5; PED.dead=false; PED.th=c.th; PED.x=c.x; PED.z=c.z; PED.v=0; PED.vx=PED.vz=0; PED.obj.fallK=0; PED.obj.g.visible=true; PED.obj.aimK=0;
     p.cam.yaw=c.th; p.cam.pitch=0; PED.fireReq=false;
     PED.trans={dir:'out', t:0, dur:0.45, ax:c.x, az:c.z, bx:d.x, bz:d.z};
-    document.body.classList.add('onfoot');
+    syncFootClass();
   } else {
     const ent=nearVehicle(); if (!ent){ toastP(p,'No hay ningún vehículo cerca','',1.0); return; }
     const d=doorPos(ent.car); PED.trans={dir:'in', t:0, dur:0.5, ax:PED.x, az:PED.z, bx:d.x, bz:d.z, ent};
   }
 }
 function enterVehicle(ent){
-  const p=players[0];
+  const p=CUR;
   if (ent!==p){
     const fromPol = POL.includes(ent);
     if (fromPol){
@@ -2975,11 +3100,11 @@ function enterVehicle(ent){
     c.vTop = topSpeed(c);
   }
   riderVis(p,true);
-  PS.foot=false; PED.obj.g.visible=false; PED.aim=false; releaseMouse(); footHud(); document.body.classList.remove('onfoot');
+  PS.foot=false; PED.obj.g.visible=false; PED.aim=false; if (p.id===0) releaseMouse(); footHud(); syncFootClass();
 }
 // --- control del prisionero ---
 function pedControl(dt){
-  const p=players[0], ks=p.keys, B=PED.obj;
+  const p=CUR, ks=p.keys, B=PED.obj;
   if (PED.dead){ PED.v*=Math.exp(-3*dt); if (PED.fallV){ PED.x+=PED.fallV.x*dt; PED.z+=PED.fallV.z*dt; PED.fallV.x*=Math.exp(-3*dt); PED.fallV.z*=Math.exp(-3*dt); }
     B.fallK=Math.min(1,B.fallK+dt*3.5); pushOutBlocks(PED,0.3); posePerson(B,'idle',dt,0); placePerson(B,PED); return; }
   if (PED.trans){ const T=PED.trans; T.t+=dt; const k=Math.min(1,T.t/T.dur);
@@ -2989,18 +3114,20 @@ function pedControl(dt){
     if (k>=1){ PED.trans=null; if (T.dir==='in') enterVehicle(T.ent); }
     return; }
   const live=!PS.over;
-  if (IS_MOBILE){   // móvil: joystick para girar y pedal para correr
-    const up=live&&(any(ks.up)||touch.gas), lf=live&&any(ks.lf), rt=live&&any(ks.rt);
-    const steer = live ? (((lf?1:0)-(rt?1:0)) || touch.steer) : 0;
+  if (IS_MOBILE || p.id===1){   // móvil y jugador 2 (flechas): girar y correr, sin pistola
+    const tc = p.id===0 ? touch : {gas:0, steer:0};
+    const up=live&&(any(ks.up)||tc.gas), lf=live&&any(ks.lf), rt=live&&any(ks.rt);
+    const steer = live ? (((lf?1:0)-(rt?1:0)) || tc.steer) : 0;
     PED.sprint = live && up;
     PED.th += steer*(PED.sprint?2.4:3.0)*dt;
     PED.v += clamp((up?6.8:0)-PED.v, -14*dt, 14*dt);
     PED.vx=Math.sin(PED.th)*PED.v; PED.vz=Math.cos(PED.th)*PED.v;
   } else {          // ordenador: W/S adelante y atrás, A/D de lado, el ratón decide hacia dónde se mira
     const k_=c=>live && !!keys[c];
-    p.cam.yaw += ((k_('ArrowLeft')?1:0)-(k_('ArrowRight')?1:0))*2.4*dt;   // sin ratón, las flechas giran la vista
+    const solo = RUN.n===1;   // a dos jugadores las flechas son del jugador 2
+    if (solo) p.cam.yaw += ((k_('ArrowLeft')?1:0)-(k_('ArrowRight')?1:0))*2.4*dt;   // sin ratón, las flechas giran la vista
     PED.aim = live && MOUSE.r && PED.gun;
-    const fw=(k_('KeyW')||k_('ArrowUp')?1:0)-(k_('KeyS')||k_('ArrowDown')?1:0), sd=(k_('KeyA')?1:0)-(k_('KeyD')?1:0);
+    const fw=(k_('KeyW')||(solo&&k_('ArrowUp'))?1:0)-(k_('KeyS')||(solo&&k_('ArrowDown'))?1:0), sd=(k_('KeyA')?1:0)-(k_('KeyD')?1:0);
     const yaw=p.cam.yaw, fx=Math.sin(yaw), fz=Math.cos(yaw), lx=fz, lz=-fx;   // delante e izquierda de la vista
     const vF = fw>0 ? (PED.aim?2.6:6.8) : (PED.aim?2.2:3.2), vS = PED.aim?2.4:4.5;
     let tx=fx*fw*vF+lx*sd*vS, tz=fz*fw*vF+lz*sd*vS; const tl=Math.hypot(tx,tz), cap=fw?vF:vS; if (tl>cap){ tx*=cap/tl; tz*=cap/tl; }
@@ -3020,8 +3147,8 @@ function pedControl(dt){
 // --- pistola del prisionero: se coge del cuerpo de un policía (E), 5 balas, se apunta con el botón derecho del ratón ---
 const MOUSE = {r:false};
 function lootable(){ let best=null, bd=1.6; for (const k of COPS) if (k.st==='dead' && !k.looted){ const d=Math.hypot(k.x-PED.x,k.z-PED.z); if (d<bd){ bd=d; best=k; } } return best; }
-function pickGun(){
-  if (!policeMode || paused || !PS.foot || PED.dead || PED.trans) return;
+function pickGun(){   // solo el jugador 1 (el del ratón) puede coger pistolas
+  if (!policeMode || paused || CUR!==players[0] || !PS.foot || PED.dead || PED.trans) return;
   const k=lootable(); if (!k) return;
   k.looted=true; if (k.B.gun) k.B.gun.visible=false;
   PED.gun=true; PED.ammo=5; PED.obj.gun.visible=true; SFX.rack(); toastP(players[0],'Pistola · 5 balas','good',1.2);
@@ -3048,28 +3175,29 @@ function pedShoot(p){
     if (hit.hp<=0){ copDie(hit, d.x*5, d.z*5); toastP(p, head?'¡Policía abatido! · a la cabeza':'¡Policía abatido!','good',1.2); }
     else toastP(p,'Impacto','good',0.6); }
 }
-function footHud(){
-  const show=policeMode && PS.foot && !PED.dead && !IS_MOBILE;
-  document.body.classList.toggle('armed', show && PED.gun); document.body.classList.toggle('aiming', show && PED.aim);
-  if (show && PED.gun){ const t='●'.repeat(PED.ammo)+'○'.repeat(5-PED.ammo); if ($('ammo').dataset.t!==t){ $('ammo').dataset.t=t; $('ammoPips').textContent=t; } }
+function footHud(){   // mira, balas y avisos del jugador 1 (el del ratón)
+  const p=players[0], s=p.ps, d=p.ped, show=policeMode && s.foot && !d.dead && !s.over && !IS_MOBILE;
+  document.body.classList.toggle('armed', show && d.gun); document.body.classList.toggle('aiming', show && d.aim);
+  if (show && d.gun){ const t='●'.repeat(d.ammo)+'○'.repeat(5-d.ammo); if ($('ammo').dataset.t!==t){ $('ammo').dataset.t=t; $('ammoPips').textContent=t; } }
   let hint='';
-  if (show && !PED.trans){ const k=lootable(); if (k && (!PED.gun || PED.ammo<5)) hint='E · Coger la pistola'; else if (document.pointerLockElement!==renderer.domElement && !paused) hint='Haz clic para mirar con el ratón'; }
+  if (show && !d.trans){ const pc=CUR; bindP(p); const k=lootable(); bindP(pc); if (k && (!d.gun || d.ammo<5)) hint='E · Coger la pistola'; else if (document.pointerLockElement!==renderer.domElement && !paused) hint='Haz clic para mirar con el ratón'; }
   const h=$('footHint'); if (h.textContent!==hint){ h.textContent=hint; h.hidden=!hint; }
 }
+const j1foot = () => { const s=players[0].ps; return policeMode && s.foot && !s.over && !players[0].ped.dead; };
 addEventListener('mousedown', e=>{
-  if (IS_MOBILE || !policeMode || paused || !PS.foot || PED.dead) return;
+  if (IS_MOBILE || paused || !j1foot()) return;
   if (e.target.closest && e.target.closest('button,.ovl,#driftPanel')) return;
   if (document.pointerLockElement!==renderer.domElement){ try{ renderer.domElement.requestPointerLock(); }catch(_){} if (e.button!==2) return; }
-  if (e.button===0) PED.fireReq=true; else if (e.button===2) MOUSE.r=true;
+  if (e.button===0) players[0].ped.fireReq=true; else if (e.button===2) MOUSE.r=true;
 });
 addEventListener('mouseup', e=>{ if (e.button===2) MOUSE.r=false; });
 addEventListener('mousemove', e=>{
-  if (document.pointerLockElement!==renderer.domElement || !PS.foot || paused) return;
-  const p=players[0], s=PED.aim?0.0013:0.0024;
+  if (document.pointerLockElement!==renderer.domElement || !j1foot() || paused) return;
+  const p=players[0], s=p.ped.aim?0.0013:0.0024;
   p.cam.yaw -= e.movementX*s; p.cam.pitch = clamp((p.cam.pitch||0) - e.movementY*s, -0.55, 0.7);
 });
-addEventListener('contextmenu', e=>{ if (policeMode && PS.foot) e.preventDefault(); });
-document.addEventListener('pointerlockchange', ()=>{ if (!document.pointerLockElement){ MOUSE.r=false; if (policeMode && PS.foot && !paused && !PS.over) pause(); } });
+addEventListener('contextmenu', e=>{ if (policeMode && players[0].ps.foot) e.preventDefault(); });
+document.addEventListener('pointerlockchange', ()=>{ if (!document.pointerLockElement){ MOUSE.r=false; if (j1foot() && !paused && !RUN.over) pause(); } });
 function releaseMouse(){ MOUSE.r=false; if (document.pointerLockElement) try{ document.exitPointerLock(); }catch(_){} }
 function placePerson(B,o){ B.g.position.set(o.x,0,o.z); B.g.rotation.y=o.th; }
 // --- policías a pie ---
@@ -3100,9 +3228,8 @@ function copNav(k, tx, tz){   // camino por la cuadrícula de calles si no hay v
   return {x:nodeX(clampNode(ni)), z:nodeX(clampNode(nj))};
 }
 function copsUpdate(dt){
-  const p=players[0];
-  const tgt = PS.foot ? (PED.dead?null:PED) : p.car;
   for (let i=COPS.length-1;i>=0;i--){ const k=COPS[i], B=k.B;
+    const p=nearestTarget(k.x,k.z) || players[0], S=p.ps, tgt = S.over||S.garIn ? null : tgtObj(p);   // cada policía va a por el jugador más cercano
     if (k.st==='dead'){ k.t+=dt; k.x+=k.fv.x*dt; k.z+=k.fv.z*dt; k.fv.x*=Math.exp(-3*dt); k.fv.z*=Math.exp(-3*dt); pushOutBlocks(k,0.3);
       B.fallK=Math.min(1,B.fallK+dt*3.5); posePerson(B,'idle',dt,0); placePerson(B,k);
       if (k.t>30){ scene.remove(B.g); COPS.splice(i,1); } continue; }   // el cuerpo se queda 30 s
@@ -3111,21 +3238,21 @@ function copsUpdate(dt){
       if (k.t>1.7){ k.st='out'; B.fallK=0; } continue; }
     // ¿volver a su coche?
     const carOk = k.car && POL.includes(k.car) && !k.car.wrecked;
-    if (!PS.foot) k.outT+=dt; else k.outT=0;
+    if (!S.foot) k.outT+=dt; else k.outT=0;
     let mx=0, mz=0, speed=0, st='idle', face=null;
-    if (!PS.foot && carOk && (k.outT>4 || Math.hypot(p.car.x-k.x,p.car.z-k.z)>40)){
+    if (!S.foot && carOk && (k.outT>4 || Math.hypot(p.car.x-k.x,p.car.z-k.z)>40)){
       const d=doorPos(k.car.car), w=copNav(k,d.x,d.z), dd=Math.hypot(d.x-k.x,d.z-k.z);
       if (dd<1.4){ k.car.out=null; k.car.thinkT=0; k.car.stopT=-8; scene.remove(B.g); COPS.splice(i,1); continue; }
       mx=w.x-k.x; mz=w.z-k.z; speed=5.5; st='run';
-    } else if (!PS.foot && !carOk){
+    } else if (!S.foot && !carOk){
       if (Math.hypot(p.car.x-k.x,p.car.z-k.z)>160){ scene.remove(B.g); COPS.splice(i,1); continue; }
       if (k.car && !carOk) k.car=null;
     }
-    if (st==='idle' && tgt && !PS.over){
+    if (st==='idle' && tgt && !RUN.over){
       const dx=tgt.x-k.x, dz=tgt.z-k.z, d=Math.hypot(dx,dz), see=los(k.x,k.z,tgt.x,tgt.z);
       if (d>15 || !see){ const w=copNav(k,tgt.x,tgt.z); mx=w.x-k.x; mz=w.z-k.z; speed=d>30?5.8:3.2; st=speed>4?'run':'walk'; }
       else { face=Math.atan2(dx,dz); st='aim'; }
-      if (see && d<32){ k.shotT-=dt; if (k.shotT<=0 && (st==='aim' || Math.random()<0.4)){ k.shotT=rnd(1.0,1.8); copShoot(k, tgt, d); } }
+      if (see && d<32){ k.shotT-=dt; if (k.shotT<=0 && (st==='aim' || Math.random()<0.4)){ k.shotT=rnd(1.0,1.8); const pc=CUR; bindP(p); copShoot(k, tgt, d); bindP(pc); } }
     }
     if (speed>0){ const m=Math.hypot(mx,mz)||1; k.th += angDiff(k.th, Math.atan2(mx,mz))*Math.min(1,dt*8); k.x+=Math.sin(k.th)*speed*dt; k.z+=Math.cos(k.th)*speed*dt; }
     else if (face!=null) k.th += angDiff(k.th, face)*Math.min(1,dt*10);
@@ -3147,37 +3274,38 @@ function copShoot(k, tgt, d){
   SFX.shot(gx,gz);
   if (!hit) return;
   PS.flash=1; SFX.hurt();
-  if (PS.foot){ PED.hp=Math.max(0,PED.hp-1); toastP(players[0],'−1 vida','bad',0.8); if (PED.hp<=0) pedDie('disparos', sn*3, cs*3); }
-  else { PS.hp=Math.max(0,PS.hp-1); toastP(players[0],'−1 vida','bad',0.8); if (PS.hp<=0) caught('vida'); }
+  if (PS.foot){ PED.hp=Math.max(0,PED.hp-1); toastP(CUR,'−1 vida','bad',0.8); if (PED.hp<=0) pedDie('disparos', sn*3, cs*3); }
+  else { PS.hp=Math.max(0,PS.hp-1); toastP(CUR,'−1 vida','bad',0.8); if (PS.hp<=0) caught('vida'); }
 }
-function allCars(){ const p=players[0], out=[p.car]; for (const e of POL) out.push(e.car); for (const e of PARKED) out.push(e.car); return out; }
+function allCars(){ const out=[]; for (const p of active) out.push(p.car); for (const e of POL) out.push(e.car); for (const e of PARKED) out.push(e.car); return out; }
 // atropellos y empujones entre personas y coches
 function peopleVsCars(){
-  const p=players[0];
-  const ents=[{c:p.car, pol:false}]; for (const e of POL) if (!e.wrecked) ents.push({c:e.car, pol:true}); for (const e of PARKED) ents.push({c:e.car, pol:false});
+  const ents=[]; for (const p of active) ents.push({c:p.car, pol:false}); for (const e of POL) if (!e.wrecked) ents.push({c:e.car, pol:true}); for (const e of PARKED) ents.push({c:e.car, pol:false});
+  const pc=CUR;
   for (const E of ents){ const c=E.c, v=Math.hypot(c.vx,c.vz);
-    if (PS.foot && !PED.dead && !PED.trans && touchCar(c,PED.x,PED.z,0.3)){
-      if (E.pol && v>3) pedDie('atropello', c.vx, c.vz); else pushOutCar(PED, c, 0.3); }
+    for (const p of active){ const d=p.ped; if (!p.ps.foot || d.dead || d.trans || !touchCar(c,d.x,d.z,0.3)) continue;
+      if (E.pol && v>3){ bindP(p); pedDie('atropello', c.vx, c.vz); } else pushOutCar(d, c, 0.3); }
     for (const k of COPS){ if (k.st==='dead') continue; if (touchCar(c,k.x,k.z,0.3)){ if (v>3) copDie(k, c.vx, c.vz); else pushOutCar(k,c,0.3); } }
   }
+  bindP(pc);
 }
 // policías que bajan del coche
 function copsExit(dt){
-  const p=players[0];
   for (const e of POL){ if (e.wrecked || e.out || e.empty) continue; const c=e.car, v=Math.hypot(c.vx,c.vz);
-    if (PS.foot && !PED.dead){ e.exitT = (Math.hypot(PED.x-c.x,PED.z-c.z)<24 && v<2.5) ? (e.exitT||0)+dt : 0;
-      if (e.exitT>1.0 && !(PED.trans && PED.trans.ent===e)) spawnCop(e,'out'); continue; }   // tarda ~1 s en bajarse: da tiempo a robarle el coche
-    if (!PS.foot){ const near=Math.hypot(p.car.x-c.x,p.car.z-c.z)<35; e.stopT = (v<1 && near) ? (e.stopT||0)+dt : Math.min(0,(e.stopT||0)+dt);
-      if (e.stopT>2.5 && e.kind!=='van'){ e.stopT=-8; spawnCop(e,'out'); } }
+    const p=nearestTarget(c.x,c.z); if (!p){ e.exitT=0; continue; }
+    const S=p.ps, D=p.ped;
+    if (S.foot){ e.exitT = (Math.hypot(D.x-c.x,D.z-c.z)<24 && v<2.5) ? (e.exitT||0)+dt : 0;
+      if (e.exitT>1.0 && !(D.trans && D.trans.ent===e)) spawnCop(e,'out'); continue; }   // tarda ~1 s en bajarse: da tiempo a robarle el coche
+    const near=Math.hypot(p.car.x-c.x,p.car.z-c.z)<35; e.stopT = (v<1 && near) ? (e.stopT||0)+dt : Math.min(0,(e.stopT||0)+dt);
+    if (e.stopT>2.5 && e.kind!=='van'){ e.stopT=-8; spawnCop(e,'out'); }
   }
 }
 function parkedUpdate(h){
-  const p=players[0];
-  for (const e of PARKED){ holdStill(e.inp, e.car); e.car.steer=0; simStep(e.car, e.inp, false, h); cityCollide(e); collideCars(p, e); for (const q of POL) collideCars(e, q); }
+  for (const e of PARKED){ holdStill(e.inp, e.car); e.car.steer=0; simStep(e.car, e.inp, false, h); cityCollide(e); for (const p of active) if (!p.ps.garIn) collideCars(p, e); for (const q of POL) collideCars(e, q); }
 }
 function footCamera(p, dt){
   const cam=p.camera, o=PED;
-  if (!IS_MOBILE && !o.dead){   // cámara al hombro guiada por el ratón; al apuntar se acerca y cierra el ángulo
+  if (!IS_MOBILE && !o.dead && p.id===0){   // cámara al hombro guiada por el ratón (jugador 1); al apuntar se acerca y cierra el ángulo
     const ak=o.obj.aimK||0, yaw=p.cam.yaw, pt=p.cam.pitch||0, cp=Math.cos(pt);
     const dx=Math.sin(yaw)*cp, dy=Math.sin(pt), dz=Math.cos(yaw)*cp, rx=-Math.cos(yaw), rz=Math.sin(yaw);
     const off=lerp(0.62,0.85,ak), py=1.65, px=o.x+rx*off, pz=o.z+rz*off;
@@ -3198,21 +3326,26 @@ function footCamera(p, dt){
 }
 function fmtT(t){ const m=Math.floor(t/60), s=t-m*60; return m+':'+(s<10?'0':'')+s.toFixed(1); }
 function policeHud(dt){
-  $('pTime').textContent=fmtT(PS.t);
+  $('pTime').textContent=fmtT(RUN.t);
   $('pGold').textContent=PSAVE.gold;
-  const hp=PS.foot?PED.hp:PS.hp, mh=PS.foot?5:PS.maxHp;
-  $('pHpLbl').textContent=PS.foot?'A pie':'Vida';
-  $('pHp').style.width=(100*hp/mh).toFixed(1)+'%';
-  $('pHp').classList.toggle('low', hp/mh<=0.3);
-  $('pHpTxt').textContent=hp+' / '+mh;
+  const two=RUN.n===2;
+  for (const p of active){ const S=p.ps, D=p.ped;
+    const hp=S.foot?D.hp:S.hp, mh=S.foot?5:S.maxHp;
+    S.flash=Math.max(0,S.flash-dt*2);
+    const H = two ? p.hud : {hpLbl:$('pHpLbl'), hp:$('pHp'), hpTxt:$('pHpTxt'), nit:$('pNit'), nitTxt:$('pNitTxt'), box:$('phudTop')};
+    H.hpLbl.textContent=S.foot?'A pie':'Vida';
+    H.hp.style.width=(100*hp/mh).toFixed(1)+'%'; H.hp.classList.toggle('low', hp/mh<=0.3); H.hpTxt.textContent=hp+' / '+mh;
+    H.nit.style.width=(100*S.nitro).toFixed(1)+'%'; H.nit.classList.toggle('on',S.nitroOn); H.nitTxt.textContent=Math.round(100*S.nitro)+' %';
+    H.box.style.boxShadow = S.flash>0 ? `0 0 0 ${3*S.flash}px rgba(255,70,60,${S.flash})` : '';
+  }
+  const pc=CUR; bindP(players[0]);
   const fb=$('footBtn'); fb.textContent = PS.foot ? 'SUBIR' : 'SALIR'; fb.classList.toggle('dim', PS.foot && !PED.trans && !nearVehicle());
-  $('pNit').style.width=(100*PS.nitro).toFixed(1)+'%'; $('pNit').classList.toggle('on',PS.nitroOn); $('pNitTxt').textContent=Math.round(100*PS.nitro)+' %';
-  PS.flash=Math.max(0,PS.flash-dt*2); $('phudTop').style.boxShadow = PS.flash>0 ? `0 0 0 ${3*PS.flash}px rgba(255,70,60,${PS.flash})` : '';
+  bindP(pc);
 }
-const pmap=$('pmap'), pctx2=pmap.getContext('2d');
-function drawPoliceMap(){
-  const W=pmap.width, R=W/2, p=PS.foot?PED:players[0].car, s=R/170;
-  const g=pctx2; g.clearRect(0,0,W,W);
+const pmap=$('pmap');
+function drawPoliceMap(pl, cv){
+  const W=cv.width, R=W/2, p=pl.ps.foot?pl.ped:pl.car, s=R/170;
+  const g=cv.getContext('2d'); g.clearRect(0,0,W,W);
   g.save(); g.beginPath(); g.arc(R,R,R-2,0,Math.PI*2); g.clip();
   g.fillStyle='#1d2027'; g.fillRect(0,0,W,W);
   g.translate(R,R); g.rotate(-Math.PI/2-Math.atan2(Math.cos(p.th),Math.sin(p.th))); g.scale(s,s); g.translate(-p.x,-p.z);
@@ -3280,11 +3413,16 @@ function refreshGarage(){
   pick.disabled=false; pick.textContent='Elegir este coche';
   if (pol){
     const st=PSTATS(gModel), un=isUnlocked(gModel), pr=PRICES[gModel];
-    $('gWho').textContent='POLICE · Oro: '+PSAVE.gold;
+    $('gWho').textContent='POLICE'+(GSPLIT||pendingMode===2 ? ' · Jugador '+(gPlayer+1) : '')+' · Oro: '+PSAVE.gold;
     const lock='<svg width="18" height="20" viewBox="0 0 18 20" aria-hidden="true"><rect x="2" y="8.5" width="14" height="10.5" rx="2" fill="currentColor"/><path d="M5 8.5V6a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>';
     box.innerHTML = '<div class="price'+(un?' free':'')+'">'+(un?'Desbloqueado':lock+pr+' oro')+'</div><p class="stats">Vida '+st.hp+' · 0–170 km/h en '+st.t170+' s</p>';
     if (!un){ if (PSAVE.gold>=pr) pick.textContent='Desbloquear · '+pr+' oro'; else { pick.textContent='Bloqueado · te faltan '+(pr-PSAVE.gold)+' oro'; pick.disabled=true; } }
   }
+  const mate = GSPLIT && players[1-GSPLIT.id], resc = !!(mate && mate.ps.over), rb=$('gRescue');
+  $('garageUI').classList.toggle('rescue', resc);
+  if (resc){ rb.textContent='Rescatar a J'+(mate.id+1)+' · '+RESCUE_PRICE+' oro'; rb.disabled = PSAVE.gold<RESCUE_PRICE; }
+  document.querySelector('.gHint').textContent = !GSPLIT ? 'Arrastra para girar el coche · flechas para cambiar de modelo'
+    : GSPLIT.id===0 ? 'A / D cambiar · Espacio elegir'+(resc?' · S rescatar':'')+' · F salir' : '← / → cambiar · Shift dcho. elegir'+(resc?' · ↓ rescatar':'')+' · Enter salir';
 }
 const SPK_ON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
 const SPK_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M17 9l5 6M22 9l-5 6"/></svg>';
@@ -3311,6 +3449,7 @@ $('gPrev').addEventListener('click',()=>changeCar(-1));
 $('gNext').addEventListener('click',()=>changeCar(1));
 $('gPick').addEventListener('click',()=>garagePick());
 $('gBack').addEventListener('click',()=>garageBack());
+$('gRescue').addEventListener('click',()=>garageRescue());
 const cvs = renderer.domElement;
 cvs.addEventListener('pointerdown',e=>{ if (menuState!=='garage') return; gDrag={id:e.pointerId,x:e.clientX,sx:e.clientX,sy:e.clientY,t:performance.now(),yaw0:gYaw}; try{ cvs.setPointerCapture(e.pointerId); }catch(_){} gVel=0; gLast=performance.now(); });
 cvs.addEventListener('pointermove',e=>{ if (!gDrag || e.pointerId!==gDrag.id) return; const dx=e.clientX-gDrag.x; gDrag.x=e.clientX; gYaw+=dx*0.012; gVel=dx*0.012*60; gLast=performance.now(); });
@@ -3325,7 +3464,7 @@ function updateGarage(dt){
   if (gPop>0){ gPop=Math.max(0,gPop-dt*4); const o=gCars[gModel]; if (o) o.g.scale.setScalar(1-0.08*gPop); }
 }
 function garageCamFit(){
-  const a=innerWidth/innerHeight, bk=MODELS[gModel] && MODELS[gModel].bike, d = (a<1.1 ? 12.5 : a<1.5 ? 10.2 : 8.9)*(bk?0.62:1);
+  const a=(GSPLIT ? innerWidth/2 : innerWidth)/innerHeight, bk=MODELS[gModel] && MODELS[gModel].bike, d = (a<1.1 ? 12.5 : a<1.5 ? 10.2 : 8.9)*(bk?0.62:1);
   gCam.aspect=a; gCam.position.set(d*0.6, (IS_MOBILE?1.7:2.1)*(bk?0.8:1), d*0.8); gCam.lookAt(0, IS_MOBILE?0.75:0.6, 0); gCam.updateProjectionMatrix();
 }
 
@@ -3362,7 +3501,7 @@ function layout(){
   players.forEach((p,i)=>{
     const h=p.hud;
     h.v.hidden = i>=mode;
-    h.v.className = 'pv ' + (mode===1 ? 'solo' : i===0 ? 'side-l' : 'side-r');
+    h.v.classList.remove('solo','side-l','side-r'); h.v.classList.add(mode===1 ? 'solo' : i===0 ? 'side-l' : 'side-r');
     h.v.style.left = mode===1 ? '0' : (i*50)+'%'; h.v.style.width = mode===1 ? '100%' : '50%';
     p.camera.aspect = (mode===1?W:W/2)/H; p.camera.updateProjectionMatrix();
   });
@@ -3439,13 +3578,15 @@ function showMenu(state){
     const sel=MODELS[PSAVE.sel.model];
     $('menuTitle').textContent='POLICE';
     $('menuSub').innerHTML='Aguanta todo lo que puedas sin que te atrapen. Pierdes si te quedas sin vida (golpes de frente de la policía a más de 100 km/h) o si te bloquean 3 s.<br><b>Oro: '+PSAVE.gold+'</b> · Mejor tiempo: '+(PSAVE.best?fmtT(PSAVE.best):'—');
-    add('Jugar',()=>{ goFullscreen(); startPolice(); },true,'Con '+sel.name).focus();
+    add(IS_MOBILE?'Jugar':'Un jugador',()=>{ goFullscreen(); startPolice(1); },true,'Con '+sel.name).focus();
+    if (!IS_MOBILE) add('Dos jugadores',()=>openGarage(2,'police'),false,'Pantalla dividida · J1 WASD + ratón · J2 flechas');
     add('Garaje POLICE',()=>openGarage(1,'police'));
     add('Volver',()=>showMenu('mode'));
   } else if (state==='caught'){
-    $('menuTitle').textContent='ATRAPADO';
-    $('menuSub').innerHTML=({bloqueo:'Te han bloqueado. ', atropello:'Te ha atropellado la policía. ', disparos:'Te han abatido a tiros. '}[PS.reason]||'Te has quedado sin vida. ')+'<br>Tiempo: <b>'+fmtT(PS.t)+'</b> · Oro ganado: <b>'+PS.goldRun+'</b><br>Nivel de búsqueda máximo: <b style="color:#ffd23a">'+'★'.repeat(PS.lvl)+'</b><span style="opacity:.35">'+'★'.repeat(5-PS.lvl)+'</span> ('+PS.lvl+'/5)'+(PS.lvl>=5?' · rojas: <b style="color:#ff2a1f">'+'★'.repeat(PS.red)+'</b><span style="opacity:.35">'+'★'.repeat(5-PS.red)+'</span> ('+PS.red+'/5)':'')+'<br>Mejor tiempo: <b>'+fmtT(PSAVE.best||0)+'</b>'+(PS.isBest?' (¡nuevo récord!)':'')+' · Oro total: <b>'+PSAVE.gold+'</b>';
-    add('Otra vez',()=>startPolice(),true).focus();
+    const R=RUN, two=R.n===2;
+    $('menuTitle').textContent= two ? 'OS HAN PILLADO' : 'ATRAPADO';
+    $('menuSub').innerHTML=(two ? 'Han caído los dos. ' : ({bloqueo:'Te han bloqueado. ', atropello:'Te ha atropellado la policía. ', disparos:'Te han abatido a tiros. '}[R.reason]||'Te has quedado sin vida. '))+'<br>Tiempo: <b>'+fmtT(R.t)+'</b> · Oro ganado: <b>'+R.goldRun+'</b><br>Nivel de búsqueda máximo: <b style="color:#ffd23a">'+'★'.repeat(R.lvl)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.lvl)+'</span> ('+R.lvl+'/5)'+(R.lvl>=5?' · rojas: <b style="color:#ff2a1f">'+'★'.repeat(R.red)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.red)+'</span> ('+R.red+'/5)':'')+'<br>Mejor tiempo: <b>'+fmtT(PSAVE.best||0)+'</b>'+(R.isBest?' (¡nuevo récord!)':'')+' · Oro total: <b>'+PSAVE.gold+'</b>';
+    add('Otra vez',()=>startPolice(R.n),true).focus();
     add('Garaje POLICE',()=>openGarage(1,'police'));
     add('Menú POLICE',()=>showMenu('police'));
   } else if (policeMode){
@@ -3473,14 +3614,36 @@ function openGarage(n, from){
   gModel=src.model; gColor=src.color;
   $('garageUI').hidden=false; garageCamFit(); refreshGarage(); $('gPick').focus();
 }
+// --- garaje en media pantalla (POLICE a dos jugadores): solo lo ve quien entra; el otro sigue jugando ---
+let GSPLIT=null;
+function openSplitGarage(p){
+  GSPLIT=p; p.ps.garIn=true; p.inp.thr=p.inp.brk=p.inp.steer=0;
+  gReturn='police'; pendingMode=1; gPlayer=p.id; const s=selOf(p); gModel=s.model; gColor=s.color;
+  const ui=$('garageUI'); ui.classList.add('split'); ui.classList.toggle('half-l', p.id===0); ui.classList.toggle('half-r', p.id===1); ui.hidden=false;
+  p.hud.v.classList.add('ingar'); document.body.classList.add('gar'+(p.id+1));
+  garageCamFit(); refreshGarage(); SFX.ui();
+}
+function closeSplitGarage(){
+  if (!GSPLIT) return; GSPLIT.ps.garIn=false; GSPLIT.hud.v.classList.remove('ingar'); document.body.classList.remove('gar1','gar2'); GSPLIT=null;
+  const ui=$('garageUI'); ui.hidden=true; ui.classList.remove('split','half-l','half-r','rescue'); garageCamFit();
+}
+function garageRescue(){   // pagar para que vuelva el compañero al que han pillado
+  const p=GSPLIT, mate=p && players[1-p.id];
+  if (!mate || !mate.ps.over || PSAVE.gold<RESCUE_PRICE) return;
+  PSAVE.gold-=RESCUE_PRICE; psave(); rescue(mate); refreshGarage();
+}
 function garagePick(){
   if (gReturn==='police'){
     if (!isUnlocked(gModel)){
       const pr=PRICES[gModel]; if (PSAVE.gold<pr) return;
       PSAVE.gold-=pr; PSAVE.unlocked.push(gModel); psave(); refreshGarage(); return;
     }
-    PSAVE.sel={model:gModel, color:gColor}; psave();
-    if (GAR.run){ GAR.run=false; hideOverlays(); garageSwap(); resume(); return; }
+    const sel={model:gModel, color:gColor};
+    if (GSPLIT){ const p=GSPLIT; if (p.id===0) PSAVE.sel=sel; else PSAVE.sel2=sel; psave(); closeSplitGarage(); bindP(p); garageSwap(); bindP(players[0]); return; }
+    if (gPlayer===1) PSAVE.sel2=sel; else PSAVE.sel=sel; psave();
+    if (players[0].ps.garRun){ bindP(players[0]); PS.garRun=false; hideOverlays(); garageSwap(); resume(); return; }
+    if (pendingMode===2 && gPlayer===0){ gPlayer=1; gModel=PSAVE.sel2.model; gColor=PSAVE.sel2.color; refreshGarage(); return; }
+    if (pendingMode===2){ goFullscreen(); startPolice(2); return; }
     showMenu('police'); return;
   }
   players[gPlayer].sel={model:gModel, color:gColor};
@@ -3488,8 +3651,9 @@ function garagePick(){
   openTrack('garage');
 }
 function garageBack(){
-  if (gPlayer===1){ gPlayer=0; gModel=players[0].sel.model; gColor=players[0].sel.color; refreshGarage(); return; }
-  if (gReturn==='police' && GAR.run){ GAR.run=false; hideOverlays(); garageLeave(); resume(); return; }
+  if (GSPLIT){ const p=GSPLIT; closeSplitGarage(); bindP(p); garageLeave(); bindP(players[0]); return; }
+  if (gPlayer===1){ gPlayer=0; const s = gReturn==='police' ? PSAVE.sel : players[0].sel; gModel=s.model; gColor=s.color; refreshGarage(); return; }
+  if (gReturn==='police' && players[0].ps.garRun){ bindP(players[0]); PS.garRun=false; hideOverlays(); garageLeave(); resume(); return; }
   if (gReturn==='pause') showMenu('pause'); else if (gReturn==='police') showMenu('police'); else showMenu('mode');
 }
 function openTrack(from){
@@ -3509,7 +3673,7 @@ function startRace(i){
   resume();
 }
 function pause(){ releaseMouse(); showMenu('pause'); }
-function resume(){ hideOverlays(); paused=false; menuState='play'; document.body.classList.remove('inmenu'); lastT=performance.now(); }
+function resume(){ hideOverlays(); paused=false; menuState='play'; document.body.classList.remove('inmenu'); lastT=performance.now(); if (GSPLIT){ $('garageUI').hidden=false; refreshGarage(); } }
 $('pauseBtn').addEventListener('click', ()=>{ if (inMain()) return; paused ? resume() : pause(); });
 $('tBack').addEventListener('click', trackBack);
 
@@ -3523,6 +3687,7 @@ function renderAll(){
   active.forEach((p,i)=>{
     const x = mode===1 ? 0 : i*W/2, w = mode===1 ? W : W/2;
     renderer.setViewport(x,0,w,H); renderer.setScissor(x,0,w,H);
+    if (GSPLIT===p){ renderer.render(gScene, gCam); return; }   // este jugador está en el garaje: solo su mitad
     sun.position.set(p.car.x+SUN_OFF.x, p.car.y+SUN_OFF.y, p.car.z+SUN_OFF.z); sun.target.position.set(p.car.x,p.car.y,p.car.z); sun.target.updateMatrixWorld();
     renderer.render(scene, p.camera);
   });
@@ -3531,15 +3696,15 @@ let lastT = performance.now();
 function frame(now){
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, Math.max(0,(now-lastT)/1000)); lastT=now;
-  if (menuState==='garage' || menuState==='track') updateGarage(dt);
+  if (menuState==='garage' || menuState==='track' || (GSPLIT && !paused)) updateGarage(dt);
   if (!paused && policeMode && !document.body.classList.contains('portrait')){
     // al perder: blanco y negro; cuando el coche se para, las opciones
-    if (PS.over){
-      PS.overT+=dt; policeFrame(dt);   // sin cámara lenta: el coche sigue a velocidad normal hasta pararse
-      const pc=players[0].car, still=Math.hypot(pc.vx,pc.vz)<0.4 && Math.abs(pc.w)<0.12;
-      PS.stillT = still ? PS.stillT+dt : 0;
+    if (RUN.over){
+      RUN.overT+=dt; policeFrame(dt);   // sin cámara lenta: el coche sigue a velocidad normal hasta pararse
+      const still=active.every(p=>Math.hypot(p.car.vx,p.car.vz)<0.4 && Math.abs(p.car.w)<0.12);
+      RUN.stillT = still ? RUN.stillT+dt : 0;
       // las opciones salen cuando el coche se ha parado del todo (o, como mucho, a los 12 s)
-      if (menuState==='play' && ((PS.stillT>=0.6 && PS.overT>=1.6) || PS.overT>=12)) showMenu('caught');
+      if (menuState==='play' && ((RUN.stillT>=0.6 && RUN.overT>=1.6) || RUN.overT>=12)) showMenu('caught');
     }
     else policeFrame(dt);
   }
