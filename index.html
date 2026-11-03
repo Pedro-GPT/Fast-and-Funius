@@ -947,7 +947,7 @@ const MODELS = [
   // hexagonal, toma inferior en trapecio y tomas bajo los faros (piezas aparte en buildCar, spec.gt).
   {name:'Thunder V8', kind:'Gran turismo V8', desc:'Capó larguísimo, habitáculo retrasado con techo oscuro y fastback, parrilla hexagonal, toma en trapecio, faros afilados y cuatro escapes.',
    ZR:-2.4, ZF:2.5, wz:[1.52,-1.45], wr:0.375, wx:0.84, tireW:[1.05,1.15], gt:true, capPaint:true,
-   halfW:[[-2.4,.74],[-2.3,.86],[-2.0,.96],[-1.45,1.0],[-0.9,.97],[-0.2,.93],[0.5,.92],[1.1,.95],[1.6,.96],[2.0,.93],[2.3,.86],[2.42,.8],[2.5,.74]],
+   halfW:[[-2.4,.52],[-2.34,.68],[-2.24,.82],[-2.08,.92],[-1.85,.97],[-1.45,.98],[-0.9,.965],[-0.2,.955],[0.5,.955],[1.1,.96],[1.6,.96],[2.0,.94],[2.2,.89],[2.35,.8],[2.44,.68],[2.5,.52]],   // en planta, óvalo: puntas redondas y laterales casi rectos
    bot:[[-2.4,.3],[-2.15,.22],[-1.8,.19],[1.85,.19],[2.3,.21],[2.5,.22]],
    sh:[[-2.4,.84],[-2.25,.9],[-2.0,.92],[-1.45,.9],[-0.8,.86],[0,.83],[0.8,.8],[1.5,.77],[1.95,.74],[2.3,.7],[2.5,.65]],
    roof:[[-2.5,.5],[-2.3,.86],[-2.05,.92],[-1.7,1.03],[-1.3,1.15],[-0.9,1.26],[-0.5,1.3],[-0.1,1.27],[0.25,1.12],[0.55,.96],[0.8,.82],[2.5,.4]],
@@ -1466,6 +1466,8 @@ function buildCar(m, paintHex, parent){
   const rod = (a,b,r,mat) => { const v=new THREE.Vector3().subVectors(b,a), L=v.length(); const o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,L,8), mat);
     o.position.copy(a).addScaledVector(v,0.5); o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), v.normalize()); g.add(o); return o; };
   const slopeAt = (z,x) => Math.atan2(B.topY(z-0.1,x)-B.topY(z+0.1,x), 0.2);
+  const zEdge = (x, front) => { let z=front?ZF:ZR; const st=front?-0.004:0.004; while (Math.abs(z-(front?ZF:ZR))<0.6 && B.halfW(z)<x) z+=st; return z; };   // dónde llega la carrocería a esa anchura (morro o cola redondeados)
+  const edgeAng = (x, front) => { const a=zEdge(x-0.03,front), b=zEdge(x+0.03,front); return Math.atan2(b-a, 0.06); };   // giro de la superficie en planta
 
   for (const s of [1,-1]){
     // Faros
@@ -1495,9 +1497,10 @@ function buildCar(m, paintHex, parent){
     } else if (spec.lights==='quad'){
       for (const x of [0.66,0.44]){ add(new THREE.CircleGeometry(0.075,20), headM, s*x, 0.66, ZF+0.014); add(SHARED.ringG, chrome, s*x, 0.66, ZF+0.016).scale.setScalar(0.72); }
     } else if (spec.lights==='gt'){   // faros afilados en las esquinas del morro, subiendo hacia fuera y doblando sobre la aleta
-      const hous=add(new THREE.BoxGeometry(0.4,0.075,0.1), carbon, s*0.55, 0.585, ZF-0.035, 0, s*0.38, s*0.13);
+      const hx=0.6, hz=zEdge(hx,true), ha=-s*edgeAng(hx,true);   // siguen la curva del morro
+      const hous=add(new THREE.BoxGeometry(0.4,0.075,0.1), carbon, s*hx, 0.585, hz-0.03, 0, ha, s*0.13);
       const lamp=add(new THREE.BoxGeometry(0.37,0.042,0.02), headM, 0, 0.006, 0.045, 0,0,0, hous); lamp.castShadow=false;
-      add(new THREE.BoxGeometry(0.2,0.008,0.012), headM, s*0.6, 0.548, ZF-0.012, 0, s*0.38, s*0.13);   // luz diurna
+      add(new THREE.BoxGeometry(0.2,0.008,0.012), headM, s*(hx+0.03), 0.548, zEdge(hx+0.03,true)+0.004, 0, ha, s*0.13);   // luz diurna
     }
     // Retrovisores
     if (!spec.f1 && spec.doors){
@@ -1516,7 +1519,8 @@ function buildCar(m, paintHex, parent){
     for (let r=0;r<4;r++) for (let c=-4;c<=4;c++){ const x=c*0.08+(r%2)*0.04, y=0.375+r*0.05; if (Math.abs(x)>0.36-Math.abs(y-0.455)*0.8) continue;   // panal
       const cell=new THREE.Mesh(new THREE.CircleGeometry(0.024,6), meshM); cell.position.set(x,y,ZF+0.009); g.add(cell); }
     flat([[-0.3,0.325],[0.3,0.325],[0.43,0.235],[-0.43,0.235]], holeM, 0.006);                                    // toma inferior en trapecio
-    for (const s of [1,-1]) flat([[s*0.5,0.43],[s*0.66,0.47],[s*0.68,0.3],[s*0.52,0.26]], holeM, 0.004);           // tomas bajo los faros
+    for (const s of [1,-1]){ const xc=0.58, o=flat([[-0.08,0.43],[0.07,0.47],[0.09,0.3],[-0.06,0.26]].map(([x,y])=>[s*x,y]), holeM, 0);   // tomas bajo los faros, sobre la curva del morro
+      o.position.set(s*xc, 0, zEdge(xc,true)+0.005); o.rotation.y=-s*edgeAng(xc,true); }
     add(new THREE.BoxGeometry(0.62,0.012,0.012), chrome, 0, 0.345, ZF+0.012);                                       // filo bajo la parrilla
   }
   // Escapes
@@ -1532,9 +1536,9 @@ function buildCar(m, paintHex, parent){
   } else if (spec.tail==='bar'){
     add(new THREE.BoxGeometry(2*tk,0.06,0.03), tailM, 0, ty-0.02, ZR-0.012);
   } else if (spec.tail==='split'){   // dos pilotos finos, uno a cada lado, que doblan hacia la aleta trasera
-    for (const s of [1,-1]){ add(new THREE.BoxGeometry(0.46,0.045,0.03), tailM, s*(tk-0.25), ty, ZR-0.012, 0,0,s*-0.04);
-      add(new THREE.BoxGeometry(0.03,0.045,0.2), tailM, s*(tk-0.01), ty+0.005, ZR+0.09); }
-    add(new THREE.BoxGeometry(0.5,0.05,0.02), carbon, 0, ty, ZR-0.008);
+    for (const s of [1,-1]){ const pts=[0.3,0.45,0.6,0.72,0.82,0.88].map((x,i)=>new THREE.Vector3(s*x, ty+0.012*i/5, zEdge(x,false)-0.008));   // siguen la cola redondeada
+      const tl=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),24,0.024,8,false), tailM); g.add(tl); }
+    add(new THREE.BoxGeometry(0.5,0.05,0.02), carbon, 0, ty, zEdge(0.25,false)-0.006);
   } else if (spec.tail==='quad4'){
     for (const s of [1,-1]) for (const x of [0.51,0.74]){
       add(new THREE.CylinderGeometry(0.065,0.065,0.03,28), tailM, s*x, 0.78, ZR-0.008, Math.PI/2);
