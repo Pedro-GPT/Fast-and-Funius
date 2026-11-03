@@ -1421,6 +1421,12 @@ function bikeControl(p, dt){
   if (v<3 && Math.abs(c.u)>0.5 && inp.thr<0.5) c.tip=(c.tip||0)+Math.sign(c.u)*1.2*(1-v/3)*dt; else c.tip=approach(c.tip||0,0,1.5*dt);
   if (v<5 && Math.abs(c.lean+(c.tip||0))>0.6) startBikeFall(p);
 }
+// POLICE: la moto gira y derrapa como los coches; la inclinación es solo visual (sale del giro) y no se cae
+function bikeLeanOnly(p, dt){
+  const c=p.car, v=Math.hypot(c.vx,c.vz), sg = c.vlong<0 ? -1 : 1;
+  const phiD = clamp(Math.atan(sg*v*c.w/P.G), -1.04, 1.04);
+  let d = (phiD-(c.lean||0))*(1-Math.exp(-dt/0.18)); d = clamp(d,-2.6*dt,2.6*dt); c.lean = (c.lean||0)+d; c.tip=0; c.u=0;
+}
 function startBikeFall(p){ const c=p.car; if (c.fallT>0) return; c.fallT=1.7; c.fallDir=Math.sign(c.lean+(c.tip||0))||1; c.lean+=c.tip||0; c.tip=0; toastP(p,'¡Al suelo!','bad',1.6); }
 function bikeUpdate(p, dt){
   const c=p.car, o=p.obj, v=Math.hypot(c.vx,c.vz), inp=p.inp;
@@ -2740,8 +2746,8 @@ function policeFrame(dt){
     if (PS.foot){ holdStill(p.inp, c); c.steer=approach(c.steer,0,3*dt); pedControl(dt); }
     else if (!PS.over){
       readInput(p, dt);
-      if (p.obj.bike) bikeControl(p, dt);
-      else { const tgt=steerTarget(c, p.inp); c.steer=approach(c.steer, tgt, (Math.abs(tgt)<Math.abs(c.steer)?3.5:2.4)*dt); }
+      const tgt=steerTarget(c, p.inp); c.steer=approach(c.steer, tgt, (Math.abs(tgt)<Math.abs(c.steer)?3.5:2.4)*dt);   // coche o moto: el mismo giro
+      if (p.obj.bike) bikeLeanOnly(p, dt);
     } else { p.inp.thr=0; p.inp.brk=c.vlong>0.5?1:0; p.inp.steer=0; p.inp.hb=true;   // frenar sin meter marcha atrás
       const k=Math.exp(-0.9*dt); c.vx*=k; c.vz*=k; c.w=clamp(c.w,-4,4)*Math.exp(-0.8*dt); }
     p.bTouch=Math.max(0,(p.bTouch||0)-dt);
@@ -2935,13 +2941,13 @@ function buildPistol(){
   const tip=new THREE.Object3D(); tip.position.set(0,0.08,0.14); g.add(tip); g.userData.muzzle=tip;
   return g;
 }
-function buildPerson(kind){
-  const P = kind==='prisoner';
+function buildPerson(kind, helmHex){   // kind: prisoner | cop | rider (piloto de la moto, con casco del color de la moto)
+  const P = kind==='prisoner', RD = kind==='rider';
   if (P && !PFACE){ PFACE=prisonerFaceTex(); PNECK=neckTattooTex(); PNUM=textTex(['6843'],256,96,78); PBACK=textTex(['STEELGATE','PRISON'],512,224,84); }
   if (!P && !CFACE) CFACE=copFaceTex();
-  const skin = pmat(P?'skinP':'skinC', P?0xe8c4a6:0xd6a684, 0.7);
-  const cloth = P ? pmat('jump',0xff5a26,0.42,{metalness:0.06}) : pmat('copTop',0x1d2c4c,0.75);
-  const legM = P ? cloth : pmat('copLeg',0x141b29,0.8);
+  const skin = RD ? pmat('glove',0x15161a,0.6) : pmat(P?'skinP':'skinC', P?0xe8c4a6:0xd6a684, 0.7);
+  const cloth = P ? pmat('jump',0xff5a26,0.42,{metalness:0.06}) : RD ? pmat('riderSuit',0x1d1f24,0.62,{metalness:0.05}) : pmat('copTop',0x1d2c4c,0.75);
+  const legM = P||RD ? cloth : pmat('copLeg',0x141b29,0.8);
   const shoe = pmat('shoe',0x121212,0.55);
   const shadow = !IS_MOBILE;
   const M=(geo,mat,parent,x,y,z)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x||0,y||0,z||0); m.castShadow=shadow; parent.add(m); return m; };
@@ -2956,14 +2962,23 @@ function buildPerson(kind){
   if (P){ M(pgeo('zip',()=>new THREE.BoxGeometry(0.012,0.5,0.006)), pmat('zipM',0xf2f2f2,0.4), torso, 0,0.29,0.128);
     const num=new THREE.Mesh(pgeo('numG',()=>new THREE.PlaneGeometry(0.14,0.055)), new THREE.MeshBasicMaterial({map:PNUM,transparent:true,depthWrite:false})); num.position.set(0.095,0.43,0.124); num.rotation.y=0.32; torso.add(num);
     const back=new THREE.Mesh(pgeo('backG',()=>new THREE.PlaneGeometry(0.3,0.13)), new THREE.MeshBasicMaterial({map:PBACK,transparent:true,depthWrite:false})); back.position.set(0,0.4,-0.128); back.rotation.y=Math.PI; torso.add(back); }
+  else if (RD){ for (const y of [0.36,0.4]) M(pgeo('rStripe',()=>new THREE.CylinderGeometry(0.193,0.186,0.018,16)), pmat('riderHi',0xe9eaec,0.55), torso, 0,y,0).scale.z=0.64;   // franjas blancas del mono
+    M(pgeo('rHump',()=>new THREE.SphereGeometry(0.1,14,10)), cloth, torso, 0,0.5,-0.1).scale.set(0.95,0.75,0.8); }   // joroba aerodinámica
   else { M(pgeo('belt',()=>new THREE.CylinderGeometry(0.178,0.178,0.05,16)), pmat('beltM',0x0b0b0b,0.5), torso,0,0.02,0).scale.z=0.64;
     M(pgeo('badge',()=>new THREE.BoxGeometry(0.04,0.05,0.01)), pmat('badgeM',0xd8b23a,0.3,{metalness:0.8}), torso,0.08,0.42,0.112); }
-  const neck=M(pgeo('neck',()=>new THREE.CylinderGeometry(0.055,0.06,0.13,14)), P?pmat('neckP',0xffffff,0.7,{map:PNECK}):skin, torso, 0,0.6,0);
+  const neck=M(pgeo('neck',()=>new THREE.CylinderGeometry(0.055,0.06,0.13,14)), P?pmat('neckP',0xffffff,0.7,{map:PNECK}):RD?cloth:skin, torso, 0,0.6,0);
   const head=new THREE.Group(); head.position.y=0.74; torso.add(head);
+  if (RD){   // casco integral del color de la moto con visera oscura
+    const hm=pmat('helm'+(helmHex||'#c8161d'), new THREE.Color(helmHex||'#c8161d').getHex(), 0.25, {metalness:0.4});
+    M(pgeo('helmet',()=>new THREE.SphereGeometry(0.15,24,16)), hm, head, 0,0.015,-0.005).scale.set(0.93,1.0,1.05);
+    M(pgeo('hVisor',()=>new THREE.SphereGeometry(0.152,18,8,Math.PI/2-0.9,1.8,1.05,0.55)), pmat('hVisorM',0x07090c,0.08,{metalness:0.6}), head, 0,0.015,-0.005).rotation.x=-0.15;
+    M(pgeo('hChin',()=>new THREE.BoxGeometry(0.15,0.05,0.05)), hm, head, 0,-0.085,0.1).rotation.x=0.35;
+  } else {
   const hd=M(pgeo('head',()=>new THREE.SphereGeometry(0.105,24,16)), P?pmat('faceP',0xffffff,0.65,{map:PFACE}):pmat('faceC',0xffffff,0.7,{map:CFACE}), head); hd.scale.set(0.9,1.12,1);
   for (const s of [-1,1]) M(pgeo('ear',()=>new THREE.SphereGeometry(0.024,8,6)), skin, head, s*0.094,0.0,-0.005).scale.set(0.5,1.1,0.8);
+  }
   if (P){ const hair=M(pgeo('hair',()=>new THREE.SphereGeometry(0.11,20,10,0,Math.PI*2,0,1.15)), pmat('hairM',0x1d1815,0.9), head, 0,0.012,-0.006); hair.scale.set(0.92,1.1,1.03); hair.rotation.x=-0.32; }
-  else { M(pgeo('capTop',()=>new THREE.CylinderGeometry(0.112,0.105,0.075,16)), pmat('capM',0x111a2e,0.6), head, 0,0.095,0);
+  else if (!RD){ M(pgeo('capTop',()=>new THREE.CylinderGeometry(0.112,0.105,0.075,16)), pmat('capM',0x111a2e,0.6), head, 0,0.095,0);
     M(pgeo('visor',()=>new THREE.BoxGeometry(0.17,0.012,0.08)), pmat('visM',0x0a0a0a,0.4), head, 0,0.065,0.1).rotation.x=0.18; }
   const arms=[], legs=[]; let gun=null;
   for (const s of [-1,1]){
@@ -2973,7 +2988,7 @@ function buildPerson(kind){
     M(pgeo('farm'+kind,()=>new THREE.CylinderGeometry(P?0.06:0.052,P?0.052:0.046,0.25,10)), cloth, el, 0,-0.125,0);
     const hand=M(pgeo('hand',()=>new THREE.SphereGeometry(0.045,10,8)), skin, el, 0,-0.29,0.005); hand.scale.set(0.8,1.15,0.6);
     if (P) M(pgeo('cuff',()=>new THREE.TorusGeometry(0.05,0.009,6,14)), pmat('gold',0xd9b445,0.3,{metalness:0.9}), el, 0,-0.235,0).rotation.x=Math.PI/2;
-    if (s<0){ gun=buildPistol(); gun.position.set(0,-0.3,0); gun.rotation.x=Math.PI/2; el.add(gun); if (P) gun.visible=false; }   // el prisionero solo la lleva si la coge
+    if (s<0){ gun=buildPistol(); gun.position.set(0,-0.3,0); gun.rotation.x=Math.PI/2; el.add(gun); if (kind!=='cop') gun.visible=false; }   // el jugador solo la lleva si la coge
     arms.push({sh,el,hand,s});
     const hp=new THREE.Group(); hp.position.set(s*0.1,0,0); hips.add(hp);
     M(pgeo('thigh'+kind,()=>new THREE.CylinderGeometry(P?0.098:0.085,P?0.088:0.074,0.46,10)), legM, hp, 0,-0.23,0);
@@ -3003,6 +3018,10 @@ function posePerson(B, st, dt, spd){
     if (B.kind==='prisoner'){   // esposado: manos juntas delante; al apuntar, las dos manos en la pistola
       const x0=-0.3 - (run?0.25:0) + (run?0.12*Math.sin(2*B.ph):walk?0.04*Math.sin(2*B.ph):0.02*Math.sin(t*1.7)), e0=-0.6 - (run?0.35:0);
       a.sh.rotation.set(lerp(x0, -1.5-(B.aimPitch||0)+(B.kick||0), ak), 0, lerp(-a.s*0.3, -a.s*0.41, ak));
+      a.el.rotation.set(lerp(e0, 0, ak), 0, 0);
+    } else if (B.kind==='rider'){   // piloto: brazos sueltos al andar; con pistola, las dos manos al frente
+      const x0=a.s*A*0.9*Math.sin(B.ph), e0=-0.25-(run?0.9:0.1);
+      a.sh.rotation.set(lerp(x0, -1.5-(B.aimPitch||0)+(B.kick||0), ak), 0, lerp(-a.s*0.06, -a.s*0.41, ak));
       a.el.rotation.set(lerp(e0, 0, ak), 0, 0);
     } else if (st==='aim'){
       if (a.s<0){ a.sh.rotation.set(-1.5,0,0.12); a.el.rotation.set(0,0,0); } else { a.sh.rotation.set(-1.35,0,-0.42); a.el.rotation.set(-0.25,0,0); }
@@ -3081,6 +3100,7 @@ function garageSwap(){   // nuevo coche elegido en el garaje, sin perder la part
 }
 function policeCarSetup(p){   // ajustes del coche propio en POLICE: impulso extra, vida y velocidad punta
   const spec=MODELS[p.obj.model], c=p.car;
+  if (spec.bike){ c.fwd=true; c.driftK=1; c.lean=0; c.tip=0; c.fallT=0; }   // la moto se conduce como los coches (con el derrape POLICE)
   c.city=1; c.boostA = spec.bike?16 : spec.scan?13 : 0; c.boostP = spec.bike?900 : spec.scan?600 : 0; c.vTop=topSpeed(c);
   p.ps.maxHp=spec.scan?30:20; p.ps.hp=p.ps.maxHp;
 }
@@ -3091,10 +3111,18 @@ function garageLeave(){   // salir del garaje sin cambiar de coche
 }
 function homeCar(p){ if (!p.homeCar) p.homeCar=p.car; p.car=p.homeCar; Object.assign(p.car, freshCar(), {drOn:false, dA:0, dBlock:false, vTop:0}); }   // vuelve al objeto de coche original del jugador
 function freshCar(){ return {x:0,y:0,z:0,th:0,vx:0,vz:0,w:0,steer:0,vlong:0,vlat:0,slipR:0,slipF:0,idx:0,grass:false,ax:0,pitch:0}; }
-function footResetP(p){   // vuelve a meter al prisionero de un jugador en su coche
+function footResetP(p){   // vuelve a meter al personaje de un jugador en su vehículo
   const s=p.ps, d=p.ped;
   s.foot=false; d.dead=false; d.trans=null; d.hp=5; d.gun=false; d.ammo=0; d.aim=false; d.fireReq=false;
-  if (d.obj){ d.obj.g.visible=false; d.obj.fallK=0; d.obj.aimK=0; d.obj.gun.visible=false; }
+  for (const o of Object.values(d.objs||{})){ o.g.visible=false; o.fallK=0; o.aimK=0; o.gun.visible=false; }
+}
+// Personaje a pie: el piloto (mono y casco del color de la moto) si el vehículo elegido es la moto; si no, el prisionero
+function pedModel(p){
+  const d=p.ped, sel=selOf(p), kind=MODELS[sel.model].bike ? 'rider' : 'prisoner', key=kind+(kind==='rider'?sel.color:'');
+  d.objs = d.objs || {};
+  if (!d.objs[key]){ d.objs[key]=buildPerson(kind, sel.color); scene.add(d.objs[key].g); d.objs[key].g.visible=false; }
+  if (d.obj && d.obj!==d.objs[key]){ d.obj.g.visible=false; d.obj.gun.visible=false; }
+  d.obj=d.objs[key]; d.obj.gun.visible=!!d.gun;
 }
 function footReset(){
   for (const p of players) footResetP(p);
@@ -3117,7 +3145,7 @@ function toggleFoot(){
   if (!PS.foot){
     if (p.wrecked) return;
     if (Math.hypot(c.vx,c.vz) > 30/3.6){ toastP(p,'Frena para salir','',1.0); return; }
-    if (!PED.obj){ PED.obj=buildPerson('prisoner'); scene.add(PED.obj.g); }
+    pedModel(p);
     const d=doorPos(c); PS.foot=true; PS.nitroOn=false; p.inp.nitro=false; p.inp.thr=0; p.inp.steer=0; c.lean=0; riderVis(p,false);
     PED.hp=5; PED.dead=false; PED.th=c.th; PED.x=c.x; PED.z=c.z; PED.v=0; PED.vx=PED.vz=0; PED.obj.fallK=0; PED.obj.g.visible=true; PED.obj.aimK=0;
     p.cam.yaw=c.th; p.cam.pitch=0; PED.fireReq=false;
