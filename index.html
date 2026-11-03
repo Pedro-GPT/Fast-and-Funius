@@ -516,11 +516,14 @@ function simStep(s, inp0, grass, dt){
 
 // ---------- Render básico ----------
 const host = $('game');
+// Chromebook: gráfica modesta y batería. Resolución a 1× la pantalla y sombras más sencillas.
+const IS_CROS = /\bCrOS\b/.test(navigator.userAgent);
+const maxDPR = () => IS_MOBILE ? 1.2 : IS_CROS ? 1 : (mode===2 ? 1.35 : 1.75);
 const renderer = new THREE.WebGLRenderer({antialias:!IS_MOBILE, powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_MOBILE?1.2:1.75));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_MOBILE?1.2:IS_CROS?1:1.75));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !IS_MOBILE;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = IS_CROS ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 host.appendChild(renderer.domElement);
 const ANISO = renderer.capabilities.getMaxAnisotropy();
 
@@ -530,7 +533,7 @@ scene.fog = new THREE.Fog(0xa8c6e2, 260, 1300);
 const hemi = new THREE.HemisphereLight(0xe4f0ff, 0x506a30, 0.75); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 1.0);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048,2048);
+sun.shadow.mapSize.set(IS_CROS?1024:2048, IS_CROS?1024:2048);
 Object.assign(sun.shadow.camera, {left:-9,right:9,top:9,bottom:-9,near:1,far:150});
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
@@ -3536,9 +3539,9 @@ function garageCamFit(){
 
 // ================= MODOS, MENÚS Y FLUJO =================
 function layout(){
-  const W=innerWidth, H=innerHeight;
+  const W=innerWidth, H=innerHeight; redraw=true;
   document.body.classList.toggle('mode1', mode===1); document.body.classList.toggle('mode2', mode===2);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, IS_MOBILE?1.2:(mode===2?1.35:1.75)));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, maxDPR()));
   renderer.setSize(W,H);
   document.body.classList.toggle('portrait', IS_MOBILE && H>W);
   players.forEach((p,i)=>{
@@ -3601,7 +3604,7 @@ function clearCaughtFx(){
 function hideOverlays(){ $('menu').hidden=true; $('garageUI').hidden=true; $('trackUI').hidden=true; }
 function showMenu(state){
   if (state!=='caught') clearCaughtFx();   // el blanco y negro es solo para la pantalla de ATRAPADO
-  hideOverlays(); paused=true; menuState=state; document.body.classList.toggle('inmenu', state!=='pause');
+  hideOverlays(); paused=true; menuState=state; document.body.classList.toggle('inmenu', state!=='pause'); redraw=true;
   const m=$('menu'), b=$('menuBtns'); m.hidden=false; b.innerHTML='';
   const add=(txt,fn,primary,sub)=>{ const e=document.createElement('button'); e.type='button'; e.textContent=txt;
     if (sub){ const sm=document.createElement('small'); sm.textContent=sub; e.appendChild(sm); }
@@ -3760,8 +3763,13 @@ function renderAll(){
   });
 }
 let lastT = performance.now();
+// Ahorro de batería: como mucho 60 imágenes por segundo, y en pausa o en los menús quietos solo se dibuja cuando algo cambia.
+const FRAME_MS = 1000/60;
+let nextT = 0, redraw = true;
 function frame(now){
   requestAnimationFrame(frame);
+  if (now < nextT - 1) return;
+  nextT = now - nextT > FRAME_MS ? now + FRAME_MS : nextT + FRAME_MS;
   const dt = Math.min(0.05, Math.max(0,(now-lastT)/1000)); lastT=now;
   if (menuState==='garage' || menuState==='track' || (GSPLIT && !paused)) updateGarage(dt);
   if (!paused && policeMode && !document.body.classList.contains('portrait')){
@@ -3798,7 +3806,8 @@ function frame(now){
     active.forEach((p,i)=>SFX.car(p, dt, (bases[i]||0)*0.6));
   }
   SFX.end(!paused && menuState==='play' && !document.body.classList.contains('portrait'));
-  renderAll();
+  const still = paused && menuState!=='garage' && menuState!=='track';   // pausa, títulos y menús: la imagen no cambia
+  if (!still || redraw){ renderAll(); redraw=false; }
 }
 addEventListener('resize', layout);
 addEventListener('orientationchange', ()=>setTimeout(layout,150));
