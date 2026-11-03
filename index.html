@@ -174,6 +174,11 @@ body.mobile #pmapWrap{left:auto;bottom:auto;top:var(--top);right:calc(var(--gr) 
 .btns button:hover{filter:brightness(1.12)}
 .btns button:disabled,.btns button:disabled:hover{background:#1a1d23;color:rgba(243,240,230,.38);cursor:not-allowed;filter:none}
 .btns small{display:block;font:600 12px var(--f-ui);letter-spacing:0;text-transform:none;margin-top:1px}
+.codeBox{display:grid;gap:6px}
+.codeBox input{min-height:48px;border-radius:8px;border:1px solid var(--accent);background:#101318;color:var(--ink);font:700 19px var(--f-num);letter-spacing:.3em;text-align:center;padding:6px 12px;outline:none}
+.codeBox input::placeholder{letter-spacing:.06em;color:rgba(243,240,230,.4);font-weight:600}
+.codeMsg{font:600 13px var(--f-ui);text-align:center;min-height:1.2em;color:var(--dim)}
+.codeMsg.ok{color:var(--good)} .codeMsg.bad{color:#ff6a5a}
 .help{display:grid;gap:8px;font-size:13px;line-height:1.55;color:var(--dim);border-top:1px solid var(--edge);padding-top:12px}
 .help b{color:var(--ink);font-weight:600}
 .help .desk,.help .mob{display:grid;gap:8px}
@@ -3606,6 +3611,7 @@ function showMenu(state){
   if (state==='title'){
     $('menuTitle').innerHTML='Fast and <span>Fuñius</span>'; $('menuSub').textContent='Siete coches, una moto, seis circuitos y una sola regla: a fondo.';
     add('Jugar',()=>{ goFullscreen(); showMenu('mode'); },true).focus();
+    codeBar(b);
   } else if (state==='mode'){
     $('menuTitle').textContent='Elige modo'; $('menuSub').textContent = IS_MOBILE ? 'En móvil se juega en solitario.' : 'Multijugador: dos coches a pantalla dividida en este ordenador.';
     add('Un jugador',()=>openGarage(1,'mode'),true).focus();
@@ -3642,6 +3648,29 @@ function showMenu(state){
     add('Cambiar circuito',()=>openTrack('pause'));
     if (!IS_MOBILE) add(mode===1?'Cambiar a multijugador':'Cambiar a un jugador',()=>showMenu('mode'));
   }
+}
+// Barra CODE del menú principal: al pulsarla se escribe ahí mismo un código. 12345 da 2.000 de oro una sola vez por partida guardada.
+const CODES = {'12345': {gold:2000}};
+function codeBar(parent){
+  const box=document.createElement('div'); box.className='codeBox';
+  const btn=document.createElement('button'); btn.type='button'; btn.textContent='Code';
+  const msg=document.createElement('div'); msg.className='codeMsg'; msg.setAttribute('aria-live','polite');
+  box.append(btn, msg); parent.appendChild(box);
+  btn.addEventListener('click', ()=>{
+    const inp=document.createElement('input'); inp.type='text'; inp.inputMode='numeric'; inp.maxLength=12; inp.placeholder='Escribe el código'; inp.setAttribute('aria-label','Código');
+    btn.replaceWith(inp); inp.focus();
+    inp.addEventListener('keydown', e=>{ e.stopPropagation();   // que las teclas no muevan el juego ni abran paneles
+      if (e.key==='Escape'){ inp.replaceWith(btn); msg.textContent=''; return; }
+      if (e.key!=='Enter') return;
+      const c=CODES[inp.value.trim()], used=PSAVE.codes||(PSAVE.codes=[]);
+      if (!c){ msg.textContent='Código incorrecto'; msg.className='codeMsg bad'; inp.select(); return; }
+      if (used.includes(inp.value.trim())){ msg.textContent='Ese código ya está usado'; msg.className='codeMsg bad'; inp.select(); return; }
+      used.push(inp.value.trim()); PSAVE.gold+=c.gold; psave();
+      msg.textContent='¡Código correcto! +'+c.gold.toLocaleString('es-ES')+' oro · Total: '+PSAVE.gold.toLocaleString('es-ES'); msg.className='codeMsg ok'; SFX.pickup();
+      inp.replaceWith(btn);
+    });
+    inp.addEventListener('keyup', e=>e.stopPropagation());
+  });
 }
 function openGarage(n, from){
   clearCaughtFx();
