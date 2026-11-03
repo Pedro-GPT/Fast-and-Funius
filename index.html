@@ -1421,6 +1421,9 @@ function bikeControl(p, dt){
   if (v<3 && Math.abs(c.u)>0.5 && inp.thr<0.5) c.tip=(c.tip||0)+Math.sign(c.u)*1.2*(1-v/3)*dt; else c.tip=approach(c.tip||0,0,1.5*dt);
   if (v<5 && Math.abs(c.lean+(c.tip||0))>0.6) startBikeFall(p);
 }
+// Caballito al dar el turbo con la moto (POLICE): sube rápido, aguanta un momento y baja suave
+const WHEELIE_T = 1.4;
+function wheelieAng(t){ const sm=x=>{ x=clamp(x,0,1); return x*x*(3-2*x); }; return 0.5*Math.min(sm(t/0.22), sm((WHEELIE_T-t)/0.5)); }
 // POLICE: la moto gira y derrapa como los coches; la inclinación es solo visual (sale del giro) y no se cae
 function bikeLeanOnly(p, dt){
   const c=p.car, v=Math.hypot(c.vx,c.vz), sg = c.vlong<0 ? -1 : 1;
@@ -2292,7 +2295,9 @@ function effects(p, dt){
 function updateCarVisual(p, dt){
   const c=p.car, o=p.obj, inp=p.inp;
   o.g.position.set(c.x,c.y,c.z); o.g.rotation.y=c.th; o.g.rotation.x=c.pitch||0;
-  if (o.bike){ if (dt>0) bikeUpdate(p, dt); o.g.rotation.z = -((c.lean||0)+(c.tip||0)); } else o.g.rotation.z=0;
+  if (o.bike){ if (dt>0) bikeUpdate(p, dt); o.g.rotation.z = -((c.lean||0)+(c.tip||0));
+    if (c.whT>0){ const a=wheelieAng(c.whT); o.g.rotation.x -= a; o.g.position.y += -MODELS[o.model].wz[1]*Math.sin(a); } }   // caballito: gira sobre la rueda trasera
+  else o.g.rotation.z=0;
   const burn = inp.thr>0.9 && c.vlong<7 && c.vlong>-0.5;
   for (const w of o.wheels){
     w.pivot.rotation.y = w.front ? c.steer : 0;
@@ -2315,7 +2320,17 @@ let mode = 1;
 const CITY = {G:10, PITCH:90, SW:20};             // 10×10 manzanas, calles de 20 m cada 90 m
 CITY.SIZE = CITY.G*CITY.PITCH;
 const PRICES = [100, 200, 0, 450, 50, 300, 1000, 1200];   // por índice de MODELS (Kreisel 9 = básico, gratis)
-const PSTATS = i => { const s=MODELS[i]; return s.bike ? {hp:20, t170:'2,0'} : s.scan ? {hp:30, t170:'2,3'} : {hp:20, t170:'5,7'}; };
+// En POLICE, cuanto más caro, mejor: puesto por precio (0 = el más barato) y de ahí potencia, empuje, agarre y vida
+const POL_RANK = (()=>{ const ids=PRICES.map((_,i)=>i).sort((a,b)=>PRICES[a]-PRICES[b]); const r=[]; ids.forEach((i,k)=>r[i]=k/(ids.length-1)); return r; })();
+function polTier(i){ const t=POL_RANK[i]||0; return {t, hp:20+Math.round(10*t), powK:1+0.4*t, gripK:1+0.15*t, boostA:16*t, boostP:900*t}; }
+const PSTATS_C = [];
+function PSTATS(i){   // datos medidos con la propia física: 0–170 km/h y velocidad punta
+  if (PSTATS_C[i]) return PSTATS_C[i];
+  const T=polTier(i), s={x:0,z:0,th:0,vx:0,vz:0,w:0,steer:0,ax:0,vlong:0,vlat:0,slipR:0,slipF:0, city:1, fwd:true, driftK:1, powK:T.powK, gripK:T.gripK, boostA:T.boostA, boostP:T.boostP};
+  const top=topSpeed(s), inp={thr:1,brk:0,steer:0,hb:false}; let t=0;
+  while (t<40 && Math.hypot(s.vx,s.vz)<170/3.6){ simStep(s, inp, false, 1/120); t+=1/120; }
+  return PSTATS_C[i] = {hp:T.hp, t170:t>=40?'—':t.toFixed(1).replace('.',','), top:Math.round(top*3.6)};
+}
 const PSAVE = (()=>{ const d={gold:0, unlocked:[2], best:0, sel:{model:2, color:'#1d5fd1'}, sel2:{model:2, color:'#f2b800'}};
   try{ const r=JSON.parse(localStorage.getItem('faf_police')||'null'); if (r && typeof r==='object') Object.assign(d, r); }catch(_){}
   if (!d.unlocked.includes(2)) d.unlocked.push(2); return d; })();
@@ -2703,7 +2718,7 @@ function exitPolice(){
   clearPolice(); clearBags(); clearDebris();
   if (cityGroup) cityGroup.visible=false; trackGroup.visible=true; setTrackEnv();
   footReset();
-  for (const p of players){ p.car.boostA=0; p.car.boostP=0; p.car.city=0; riderVis(p,true); homeCar(p); applySelection(p); }
+  for (const p of players){ p.car.boostA=0; p.car.boostP=0; p.car.city=0; p.car.powK=1; p.car.whT=0; riderVis(p,true); homeCar(p); applySelection(p); p.car.powK=1; }   // en carrera todos rinden igual
   bindP(players[0]);
 }
 function caught(reason){   // pillan al jugador activo (CUR); la partida acaba cuando no queda ninguno
@@ -2752,8 +2767,9 @@ function policeFrame(dt){
       const k=Math.exp(-0.9*dt); c.vx*=k; c.vz*=k; c.w=clamp(c.w,-4,4)*Math.exp(-0.8*dt); }
     p.bTouch=Math.max(0,(p.bTouch||0)-dt);
     const want=!PS.over && !PS.foot && !PS.garIn && p.nitroKey && !p.wrecked;
-    if (want && PS.nitro>0.01 && (PS.nitroOn || PS.nitro>0.06)){ if (!PS.nitroOn) SFX.nitro(); PS.nitroOn=true; PS.nitro=Math.max(0, PS.nitro-dt/3); }
+    if (want && PS.nitro>0.01 && (PS.nitroOn || PS.nitro>0.06)){ if (!PS.nitroOn){ SFX.nitro(); if (p.obj.bike && !(c.whT>0)) c.whT=1e-4; } PS.nitroOn=true; PS.nitro=Math.max(0, PS.nitro-dt/3); }   // moto: caballito al dar el turbo
     else { PS.nitroOn=false; PS.nitro=Math.min(1, PS.nitro+dt/30); }
+    if (c.whT>0){ c.whT+=dt; if (c.whT>WHEELIE_T) c.whT=0; }
     p.inp.nitro=PS.nitroOn; p.nitroK += ((PS.nitroOn?1:0)-p.nitroK)*Math.min(1, dt*(PS.nitroOn?6:2.5));
     if (PS.nitroOn){ const sp=MODELS[p.obj.model], zr=(sp.ZR||-2.2)+0.05, sn=Math.sin(c.th), cs=Math.cos(c.th), xs = p.obj.bike?[0]:[-0.42,0.42];
       for (const lx of xs) for (let q=0;q<2;q++) if (Math.random()<60*PQ*dt){ const ex=c.x+cs*lx+sn*zr, ez=c.z-sn*lx+cs*zr;
@@ -3098,11 +3114,11 @@ function garageSwap(){   // nuevo coche elegido en el garaje, sin perder la part
   PS.foot=false; PED.trans=null; if (PED.obj) PED.obj.g.visible=false; syncFootClass();
   garageExit(p);
 }
-function policeCarSetup(p){   // ajustes del coche propio en POLICE: impulso extra, vida y velocidad punta
-  const spec=MODELS[p.obj.model], c=p.car;
-  if (spec.bike){ c.fwd=true; c.driftK=1; c.lean=0; c.tip=0; c.fallT=0; }   // la moto se conduce como los coches (con el derrape POLICE)
-  c.city=1; c.boostA = spec.bike?16 : spec.scan?13 : 0; c.boostP = spec.bike?900 : spec.scan?600 : 0; c.vTop=topSpeed(c);
-  p.ps.maxHp=spec.scan?30:20; p.ps.hp=p.ps.maxHp;
+function policeCarSetup(p){   // ajustes del coche propio en POLICE según su precio: potencia, empuje, agarre, vida y velocidad punta
+  const spec=MODELS[p.obj.model], c=p.car, T=polTier(p.obj.model);
+  if (spec.bike){ c.fwd=true; c.driftK=1; c.lean=0; c.tip=0; c.fallT=0; c.whT=0; }   // la moto se conduce como los coches (con el derrape POLICE)
+  c.city=1; c.powK=T.powK; c.gripK=T.gripK; c.boostA=T.boostA; c.boostP=T.boostP; c.vTop=topSpeed(c);
+  p.ps.maxHp=T.hp; p.ps.hp=p.ps.maxHp;
 }
 function garageLeave(){   // salir del garaje sin cambiar de coche
   const p=CUR;
@@ -3489,7 +3505,7 @@ function refreshGarage(){
     const st=PSTATS(gModel), un=isUnlocked(gModel), pr=PRICES[gModel];
     $('gWho').textContent='POLICE'+(GSPLIT||pendingMode===2 ? ' · Jugador '+(gPlayer+1) : '')+' · Oro: '+PSAVE.gold;
     const lock='<svg width="18" height="20" viewBox="0 0 18 20" aria-hidden="true"><rect x="2" y="8.5" width="14" height="10.5" rx="2" fill="currentColor"/><path d="M5 8.5V6a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>';
-    box.innerHTML = '<div class="price'+(un?' free':'')+'">'+(un?'Desbloqueado':lock+pr+' oro')+'</div><p class="stats">Vida '+st.hp+' · 0–170 km/h en '+st.t170+' s</p>';
+    box.innerHTML = '<div class="price'+(un?' free':'')+'">'+(un?'Desbloqueado':lock+pr+' oro')+'</div><p class="stats">Vida '+st.hp+' · 0–170 km/h en '+st.t170+' s · Punta '+st.top+' km/h</p>';
     if (!un){ if (PSAVE.gold>=pr) pick.textContent='Desbloquear · '+pr+' oro'; else { pick.textContent='Bloqueado · te faltan '+(pr-PSAVE.gold)+' oro'; pick.disabled=true; } }
   }
   const mate = GSPLIT && players[1-GSPLIT.id], resc = !!(mate && mate.ps.over), rb=$('gRescue');
