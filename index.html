@@ -942,17 +942,20 @@ const MODELS = [
    dark:(z,ax,y,S)=> (z>1.85&&y<S.b+0.22&&ax>0.12)||(z>1.3&&z<1.8&&ax>0.22&&ax<0.5&&y>S.sS-0.05)||(z>-2.2&&z<-1.6&&ax<0.6&&y>S.sS-0.06&&louver(z,26))||(z<-2.32&&y<0.62),
    recess:(z,ax,y,S)=> z>-1.3&&z<-0.35&&y>0.3&&y<S.sS-0.08&&ax>S.w*0.85, recessK:0.9,
    lights:'strip', tail:'tube', wing:'hyper', fin:true, exhaust:[[-.12,.45],[.12,.45]]},
-  // Thunder V8: gran turismo de las vistas de referencia (capó muy largo, techo fastback, parrilla grande y cuatro escapes)
-  {name:'Thunder V8', kind:'Gran turismo V8', desc:'Capó muy largo, techo que cae en fastback hasta una cola corta, parrilla ancha, faros finos y cuatro escapes.',
-   ZR:-2.4, ZF:2.48, wz:[1.5,-1.38], wr:0.37, wx:0.83, tireW:[1.05,1.15],
-   halfW:[[-2.4,.84],[-2.2,.94],[-1.55,1.0],[-1.0,.98],[-0.3,.93],[0.5,.93],[1.2,.97],[1.7,.97],[2.1,.94],[2.3,.88],[2.42,.74],[2.48,.5]],
-   bot:[[-2.4,.3],[-2.1,.22],[-1.7,.19],[1.9,.19],[2.25,.2],[2.48,.22]],
-   sh:[[-2.4,.82],[-2.05,.88],[-1.45,.9],[-0.7,.86],[0.2,.82],[0.9,.8],[1.6,.79],[2.1,.76],[2.35,.71],[2.48,.64]],
-   roof:[[-2.5,.5],[-2.25,.84],[-1.9,.94],[-1.4,1.08],[-0.9,1.2],[-0.4,1.26],[0.1,1.25],[0.45,1.12],[0.8,.9],[1.05,.66],[2.5,.35]],
-   gw:[[-1.8,.55],[-1.2,.66],[-0.5,.7],[0.3,.7],[0.85,.76]],
-   bumpF:.04, bumpR:.07, box:.12, hoodDip:.03, glassZMin:-1.75, roofPaint:[-0.95,0.0], doors:[0.45,-0.9],
-   dark:(z,ax,y,S)=> (z>2.3&&y>S.b+0.05&&y<S.sS-0.1&&ax<0.5)||(z>2.2&&y<S.b+0.05)||(z<-2.26&&y<0.42&&ax<S.w*0.8),
-   lights:'slant', tail:'bar', wing:'duck', exhaust:[[-.56,.3],[-.43,.3],[.43,.3],[.56,.3]]},
+  // Thunder V8: gran turismo rehecho a partir de las seis vistas de referencia. El parabrisas acaba a mitad del coche:
+  // delante, capó largo; detrás, habitáculo con techo oscuro y luna fastback casi hasta la cola. Morro plano con parrilla
+  // hexagonal, toma inferior en trapecio y tomas bajo los faros (piezas aparte en buildCar, spec.gt).
+  {name:'Thunder V8', kind:'Gran turismo V8', desc:'Capó larguísimo, habitáculo retrasado con techo oscuro y fastback, parrilla hexagonal, toma en trapecio, faros afilados y cuatro escapes.',
+   ZR:-2.4, ZF:2.5, wz:[1.52,-1.45], wr:0.375, wx:0.84, tireW:[1.05,1.15], gt:true, capPaint:true,
+   halfW:[[-2.4,.74],[-2.3,.86],[-2.0,.96],[-1.45,1.0],[-0.9,.97],[-0.2,.93],[0.5,.92],[1.1,.95],[1.6,.96],[2.0,.93],[2.3,.86],[2.42,.8],[2.5,.74]],
+   bot:[[-2.4,.3],[-2.15,.22],[-1.8,.19],[1.85,.19],[2.3,.21],[2.5,.22]],
+   sh:[[-2.4,.84],[-2.25,.9],[-2.0,.92],[-1.45,.9],[-0.8,.86],[0,.83],[0.8,.8],[1.5,.77],[1.95,.74],[2.3,.7],[2.5,.65]],
+   roof:[[-2.5,.5],[-2.3,.86],[-2.05,.92],[-1.7,1.03],[-1.3,1.15],[-0.9,1.26],[-0.5,1.3],[-0.1,1.27],[0.25,1.12],[0.55,.96],[0.8,.82],[2.5,.4]],
+   gw:[[-2.0,.48],[-1.4,.62],[-0.7,.68],[0.1,.68],[0.75,.74]],
+   bumpF:.045, bumpR:.06, box:.25, hoodDip:-.015, glassZMin:-2.02, roofPaint:[9,9], doors:[0.55,-0.95],
+   dark:(z,ax,y,S)=> (z<-2.27&&y<0.42&&ax<S.w*0.82)||(z>2.0&&y<S.b+0.04),
+   lights:'gt', tail:'split', wing:null, exhaust:[[-.5,.29],[-.38,.29],[.38,.29],[.5,.29]],
+   rimColor:0x2b2e34, rimLip:0x3d4148, spokeOff:[-0.2,0.2]},
   {name:'Monoposto F', kind:'Monoplaza de fórmula', desc:'Ruedas descubiertas, halo de protección, pontones laterales y alerones delantero y trasero.',
    ZR:-2.35, ZF:2.6, wz:[1.78,-1.62], wr:0.35, wx:0.84, tireW:[1.15,1.4], noArches:true, f1:true,
    halfW:[[-2.35,.2],[-2.1,.28],[-1.6,.42],[-1.15,.6],[-0.5,.66],[0.05,.6],[0.35,.36],[0.9,.3],[1.5,.22],[2.1,.13],[2.6,.07]],
@@ -1050,7 +1053,7 @@ function getBody(m){
   const nV = pos.length/3, fi=nV, ri=nV+1;
   const cF = info(ZF), cR = info(ZR);
   pos.push(0,(cF.b+cF.pts[K].y)/2,ZF+0.012, 0,(cR.b+cR.pts[K].y)/2,ZR-0.012);
-  uv.push(1,0.5, 0,0.5); col.push(0.05,0.05,0.05, 0.05,0.05,0.05); glass.push(0,0);
+  uv.push(1,0.5, 0,0.5); { const cf=sp.capPaint?1:0.05; col.push(cf,cf,cf, 0.05,0.05,0.05); } glass.push(0,0);
   const P3 = i => new THREE.Vector3(pos[i*3],pos[i*3+1],pos[i*3+2]);
   const paintIdx=[], glassIdx=[], e1=new THREE.Vector3(), e2=new THREE.Vector3();
   const tri = (a,b,c,want)=>{
@@ -1491,6 +1494,10 @@ function buildCar(m, paintHex, parent){
       g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,0.012,6,false), headM));
     } else if (spec.lights==='quad'){
       for (const x of [0.66,0.44]){ add(new THREE.CircleGeometry(0.075,20), headM, s*x, 0.66, ZF+0.014); add(SHARED.ringG, chrome, s*x, 0.66, ZF+0.016).scale.setScalar(0.72); }
+    } else if (spec.lights==='gt'){   // faros afilados en las esquinas del morro, subiendo hacia fuera y doblando sobre la aleta
+      const hous=add(new THREE.BoxGeometry(0.4,0.075,0.1), carbon, s*0.55, 0.585, ZF-0.035, 0, s*0.38, s*0.13);
+      const lamp=add(new THREE.BoxGeometry(0.37,0.042,0.02), headM, 0, 0.006, 0.045, 0,0,0, hous); lamp.castShadow=false;
+      add(new THREE.BoxGeometry(0.2,0.008,0.012), headM, s*0.6, 0.548, ZF-0.012, 0, s*0.38, s*0.13);   // luz diurna
     }
     // Retrovisores
     if (!spec.f1 && spec.doors){
@@ -1499,6 +1506,18 @@ function buildCar(m, paintHex, parent){
       add(new THREE.CircleGeometry(0.055,18), chrome, s*mx, my, mz-0.058, 0, Math.PI).scale.set(1.3,0.62,1);
       add(new THREE.CylinderGeometry(0.012,0.016,0.16,8), carbon, s*(mx-0.11), my-0.03, mz+0.03, 0,0,Math.PI/2);
     }
+  }
+  // Morro del gran turismo: parrilla hexagonal, toma inferior en trapecio y tomas bajo los faros
+  if (spec.gt){
+    const holeM = new THREE.MeshStandardMaterial({color:0x07080a, roughness:0.6, metalness:0.2, polygonOffset:true, polygonOffsetFactor:-2});
+    const meshM = new THREE.MeshStandardMaterial({color:0x22252a, roughness:0.45, metalness:0.6, polygonOffset:true, polygonOffsetFactor:-3});
+    const flat = (pts, mat, dz) => { const sh=new THREE.Shape(pts.map(([x,y])=>new THREE.Vector2(x,y))); const o=new THREE.Mesh(new THREE.ShapeGeometry(sh), mat); o.position.z=ZF+dz; g.add(o); return o; };
+    flat([[-0.46,0.45],[-0.37,0.565],[0.37,0.565],[0.46,0.45],[0.37,0.345],[-0.37,0.345]], holeM, 0.006);          // parrilla hexagonal
+    for (let r=0;r<4;r++) for (let c=-4;c<=4;c++){ const x=c*0.08+(r%2)*0.04, y=0.375+r*0.05; if (Math.abs(x)>0.36-Math.abs(y-0.455)*0.8) continue;   // panal
+      const cell=new THREE.Mesh(new THREE.CircleGeometry(0.024,6), meshM); cell.position.set(x,y,ZF+0.009); g.add(cell); }
+    flat([[-0.3,0.325],[0.3,0.325],[0.43,0.235],[-0.43,0.235]], holeM, 0.006);                                    // toma inferior en trapecio
+    for (const s of [1,-1]) flat([[s*0.5,0.43],[s*0.66,0.47],[s*0.68,0.3],[s*0.52,0.26]], holeM, 0.004);           // tomas bajo los faros
+    add(new THREE.BoxGeometry(0.62,0.012,0.012), chrome, 0, 0.345, ZF+0.012);                                       // filo bajo la parrilla
   }
   // Escapes
   for (const [x,y] of spec.exhaust){
@@ -1512,6 +1531,10 @@ function buildCar(m, paintHex, parent){
     g.add(new THREE.Mesh(new THREE.TubeGeometry(tc,80,0.022,8,false), tailM));
   } else if (spec.tail==='bar'){
     add(new THREE.BoxGeometry(2*tk,0.06,0.03), tailM, 0, ty-0.02, ZR-0.012);
+  } else if (spec.tail==='split'){   // dos pilotos finos, uno a cada lado, que doblan hacia la aleta trasera
+    for (const s of [1,-1]){ add(new THREE.BoxGeometry(0.46,0.045,0.03), tailM, s*(tk-0.25), ty, ZR-0.012, 0,0,s*-0.04);
+      add(new THREE.BoxGeometry(0.03,0.045,0.2), tailM, s*(tk-0.01), ty+0.005, ZR+0.09); }
+    add(new THREE.BoxGeometry(0.5,0.05,0.02), carbon, 0, ty, ZR-0.008);
   } else if (spec.tail==='quad4'){
     for (const s of [1,-1]) for (const x of [0.51,0.74]){
       add(new THREE.CylinderGeometry(0.065,0.065,0.03,28), tailM, s*x, 0.78, ZR-0.008, Math.PI/2);
@@ -1597,7 +1620,7 @@ function buildCar(m, paintHex, parent){
     const t=new THREE.Mesh(SHARED.tireG,tireM); t.castShadow=true; spin.add(t);
     spin.add(new THREE.Mesh(SHARED.barrelG,barrelM));
     const lip=new THREE.Mesh(SHARED.lipG,lipM); lip.position.x=0.112; spin.add(lip);
-    for (let k=0;k<5;k++) for (const o of [-0.13,0.13]){ const sk=new THREE.Mesh(SHARED.spokeG,rimM); sk.rotation.x=k*Math.PI*2/5+o; sk.position.x=0.072; spin.add(sk); }
+    for (let k=0;k<5;k++) for (const o of (spec.spokeOff||[-0.13,0.13])){ const sk=new THREE.Mesh(SHARED.spokeG,rimM); sk.rotation.x=k*Math.PI*2/5+o; sk.position.x=0.072; spin.add(sk); }
     const hub=new THREE.Mesh(SHARED.hubG,rimM); hub.position.x=0.1; spin.add(hub);
     const disc=new THREE.Mesh(SHARED.discG,discM); disc.position.x=-0.03; spin.add(disc);
     const cal=new THREE.Mesh(SHARED.calG,calM); cal.position.x=-0.06; mir.add(cal);
@@ -1617,7 +1640,7 @@ function disposeCar(o){
 }
 
 // ---------- Jugadores ----------
-const PALETTE = [['Amarillo','#f2b800'],['Azul','#1d5fd1'],['Rojo','#c8161d'],['Naranja','#f26a00'],['Verde','#1f7a3a'],['Celeste','#4fb3e8'],['Morado','#5b2a86'],['Blanco','#eef0f2'],['Plata','#9aa1a8'],['Negro','#15171a']];
+const PALETTE = [['Amarillo','#f2b800'],['Azul','#1d5fd1'],['Rojo','#c8161d'],['Naranja','#f26a00'],['Verde','#1f7a3a'],['Celeste','#4fb3e8'],['Morado','#5b2a86'],['Blanco','#eef0f2'],['Plata','#9aa1a8'],['Gris azulado','#5e6b7a'],['Negro','#15171a']];
 function uiColor(hex){ const c=new THREE.Color(hex); const l=0.2126*c.r+0.7152*c.g+0.0722*c.b; return l<0.12 ? '#d6d9de' : hex; }
 const KEYSETS = {
   solo:  {up:['ArrowUp','KeyW'], dn:['ArrowDown','KeyS'], lf:['ArrowLeft','KeyA'], rt:['ArrowRight','KeyD'], hb:['Space','KeyE','KeyM']},
