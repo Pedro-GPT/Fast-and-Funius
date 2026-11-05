@@ -85,6 +85,8 @@ body.police .pv .times,body.police #mapwrap{display:none!important}
 .pGoldRow{display:flex;align-items:center;gap:8px}
 .coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff3b0,#f2c21a 45%,#a8800a);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
 .pGoldRow b{font:800 24px var(--f-num);color:#ffd23a;font-variant-numeric:tabular-nums}
+.pCodeRow{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.pCodeRow b{font:800 20px var(--f-num);letter-spacing:.08em;color:#ffd23a;font-variant-numeric:tabular-nums}
 .hpRow{display:flex;align-items:center;gap:10px}
 .hpBar{flex:1;height:12px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden;min-width:110px}
 #pHp{height:100%;width:100%;background:linear-gradient(90deg,#3ccf6a,#8ee05a);transition:width .2s}
@@ -139,6 +141,13 @@ body.mode2.armed #ammo{right:calc(50% + 16px)}
 #garageUI.split.half-l .gInfo{right:calc(var(--gr) + 64px)}
 #garageUI.split .gInfo h2,#garageUI.split .gTitle{font-size:26px}
 .pv.ingar .pstat,.pv.ingar .speedo,body.gar1 #pmapWrap,body.gar2 #pmapWrap2,body.gar1 #phudTop{display:none!important}
+#wheelBox{position:absolute;inset:0;display:grid;place-items:center;background:rgba(10,12,16,.74);pointer-events:auto;z-index:5}
+#wheelBox[hidden]{display:none}
+.wheelPanel{display:grid;justify-items:center;gap:12px;max-width:94%}
+.wheelWrap{position:relative;width:min(300px,52vh,80vw);aspect-ratio:1}
+#wheelC{width:100%;height:100%;display:block;border-radius:50%;box-shadow:0 0 0 4px #14171d,0 0 0 6px var(--accent)}
+.wheelPin{position:absolute;left:50%;top:-10px;margin-left:-13px;width:0;height:0;border:13px solid transparent;border-top:24px solid #fff;z-index:1;filter:drop-shadow(0 2px 2px rgba(0,0,0,.6))}
+.wheelMsg{font:700 18px var(--f-num);letter-spacing:.03em;min-height:1.3em;text-align:center}
 #gRescue{display:none}
 #garageUI.rescue #gRescue{display:inline-block}
 #xhair,#ammo{display:none}
@@ -295,6 +304,7 @@ body.mobile.portrait #rotate{display:grid}
   <div class="panel" id="phudTop">
     <div class="pTime"><span class="lbl">Tiempo</span><b id="pTime">0:00.0</b></div>
     <div class="pGoldRow"><span class="coin"></span><b id="pGold">0</b><span class="lbl">oro</span></div>
+    <div class="pCodeRow"><span class="lbl">Código</span><b id="pCode">_ _ _ _ _</b></div>
     <div class="hpRow"><span class="lbl" id="pHpLbl">Vida</span><div class="hpBar"><div id="pHp"></div></div><span id="pHpTxt">20 / 20</span></div>
     <div class="hpRow"><span class="lbl">Nitro</span><div class="hpBar"><div id="pNit"></div></div><span id="pNitTxt">100 %</span></div>
   </div>
@@ -325,10 +335,17 @@ body.mobile.portrait #rotate{display:grid}
   </div>
   <button class="gArrow l" id="gPrev" type="button" aria-label="Coche anterior">‹</button>
   <button class="gArrow r" id="gNext" type="button" aria-label="Coche siguiente">›</button>
+  <div id="wheelBox" hidden>
+    <div class="wheelPanel">
+      <div class="wheelWrap"><div class="wheelPin"></div><canvas id="wheelC" width="480" height="480"></canvas></div>
+      <div class="wheelMsg" id="wheelMsg" aria-live="polite"></div>
+      <div class="gBtns"><button id="wheelClose" type="button">Cerrar</button><button id="wheelGo" class="primary" type="button"></button></div>
+    </div>
+  </div>
   <div class="gHint">Arrastra para girar el coche · flechas para cambiar de modelo</div>
   <div class="gBottom">
     <div class="swatches" id="swatches"></div>
-    <div class="gBtns"><button id="gBack" type="button">Volver</button><button id="gRescue" type="button"></button><button id="gPick" class="primary" type="button">Elegir este coche</button></div>
+    <div class="gBtns"><button id="gBack" type="button">Volver</button><button id="gRescue" type="button"></button><button id="gSpin" type="button" hidden></button><button id="gPick" class="primary" type="button">Elegir este coche</button></div>
   </div>
 </div>
 
@@ -1669,7 +1686,7 @@ const KEYSETS = {
   wasd:  {up:['KeyW'], dn:['KeyS'], lf:['KeyA'], rt:['KeyD'], hb:['KeyE']}
 };
 let paused = true, menuState = 'title';
-const inMain = () => menuState==='title' || menuState==='mode' || menuState==='garage' || menuState==='track' || menuState==='police' || menuState==='caught';
+const inMain = () => menuState==='title' || menuState==='mode' || menuState==='race' || menuState==='garage' || menuState==='track' || menuState==='police' || menuState==='caught';
 function makeHud(){
   const v=document.createElement('div'); v.className='pv';
   v.innerHTML = `
@@ -2086,10 +2103,16 @@ function collideCars(A, B){
 const keys = {}; const touch = {gas:0,brake:0,hb:0,steer:0,nitro:0};
 const GAME_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD','KeyR','KeyE','KeyM','KeyP','KeyF','ShiftLeft','ShiftRight'];
 addEventListener('keydown', e=>{
-  if (GAME_KEYS.includes(e.code) && menuState!=='title' && menuState!=='mode') e.preventDefault();
+  if (GAME_KEYS.includes(e.code) && menuState!=='title' && menuState!=='mode' && menuState!=='race') e.preventDefault();
   if (e.code==='Enter' && policeMode && !paused) e.preventDefault();   // Enter es la tecla de bajar/subir del J2: que no pulse botones
   keys[e.code]=true;
   if (e.repeat) return;
+  if (WH.open && (menuState==='garage' || GSPLIT)){   // ruleta abierta: solo girar o cerrar
+    const j2=GSPLIT && GSPLIT.id===1;
+    if (e.code==='Escape' || (GSPLIT && e.code===(j2?'Enter':'KeyF'))) wheelClose();
+    else if (e.code===(j2?'ShiftRight':'Space')) wheelSpin();
+    return;
+  }
   if (menuState==='garage'){
     if (e.code==='ArrowLeft'||e.code==='KeyA') changeCar(-1);
     else if (e.code==='ArrowRight'||e.code==='KeyD') changeCar(1);
@@ -2108,6 +2131,7 @@ addEventListener('keydown', e=>{
       if (c===(j1?'Space':'ShiftRight')){ garagePick(); return; }
       if (c===(j1?'KeyS':'ArrowDown')){ garageRescue(); return; }
       if (c===(j1?'KeyF':'Enter')){ garageBack(); return; }
+      if (c===(j1?'KeyW':'ArrowUp')){ wheelOpen(); return; }
     }
     if (e.code==='KeyF' && !players[0].ps.garIn){ bindP(players[0]); toggleFoot(); }
     if (e.code==='Enter' && RUN.n===2 && !players[1].ps.garIn){ bindP(players[1]); toggleFoot(); bindP(players[0]); }
@@ -2331,7 +2355,7 @@ function PSTATS(i){   // datos medidos con la propia física: 0–170 km/h y vel
   while (t<40 && Math.hypot(s.vx,s.vz)<170/3.6){ simStep(s, inp, false, 1/120); t+=1/120; }
   return PSTATS_C[i] = {hp:T.hp, t170:t>=40?'—':t.toFixed(1).replace('.',','), top:Math.round(top*3.6)};
 }
-const PSAVE = (()=>{ const d={gold:0, unlocked:[2], best:0, sel:{model:2, color:'#1d5fd1'}, sel2:{model:2, color:'#f2b800'}};
+const PSAVE = (()=>{ const d={gold:0, unlocked:[2], best:0, sel:{model:2, color:'#1d5fd1'}, sel2:{model:2, color:'#f2b800'}, earned:[]};
   try{ const r=JSON.parse(localStorage.getItem('faf_police')||'null'); if (r && typeof r==='object') Object.assign(d, r); }catch(_){}
   if (!d.unlocked.includes(2)) d.unlocked.push(2); return d; })();
 function psave(){ try{ localStorage.setItem('faf_police', JSON.stringify(PSAVE)); }catch(_){} }
@@ -2353,6 +2377,7 @@ const onStreetX = z => Math.abs(z - Math.round(z/CITY.PITCH)*CITY.PITCH) < CITY.
 // Garaje físico (POLICE): casa con puerta metálica abierta en la manzana (4,5), con la puerta a la calle x = 450
 const GAR = {i:4, j:5}; GAR.fx = nodeX(GAR.i+1)-CITY.SW/2; GAR.z = nodeX(GAR.j)+CITY.PITCH/2; GAR.sx = GAR.fx+4.2; GAR.armed=false; GAR.run=false; GAR.warnT=0;
 GAR.door = GAR.fx-4; GAR.px0 = GAR.door-11.5; GAR.pw = 3.4;   // puerta (7 m) e interior hasta la pared del fondo
+GAR.open = true; GAR.openK = 1;
 GAR.aw = 6; GAR.rl = 3; GAR.h = 0.2;   // vado: medio ancho en la acera, largo de la rampa en la calzada y altura de la acera
 // Altura del suelo en el acceso al garaje: rampa en la calzada, vado en la acera y suelo interior.
 function garFloor(x,z){
@@ -2375,7 +2400,7 @@ function garPocket(cx,cz,r){
   } else {                                                                               // en el vado
     if (cx<GAR.fx) put(0,-s, adz+r-GAR.aw, cx, GAR.z+s*GAR.aw);                          // bordes del vado con la acera
     else pt(GAR.fx, GAR.z+s*GAR.aw);                                                     // esquinas del bordillo
-    if (adz>=GAR.pw) put(1,0, F-(cx-r), F, cz);                                          // fachada a los lados de la puerta
+    if (adz>=GAR.pw || !GAR.open) put(1,0, F-(cx-r), F, cz);                             // fachada a los lados de la puerta, o la puerta bajada
     else pt(F, GAR.z+s*GAR.pw);                                                          // jambas de la puerta
   }
   return best;
@@ -2397,6 +2422,10 @@ function buildGarageHouse(grp){
   roll.rotation.x=Math.PI/2; roll.position.set(fx+0.45, dh+0.18+0.05, z); g.add(roll);                // persiana metálica enrollada (abierta)
   const lip=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.35,dw), new THREE.MeshStandardMaterial({map:metalT, metalness:0.6, roughness:0.45})); lip.position.set(fx+0.45, dh-0.05, z); g.add(lip);
   const vadoM=new THREE.MeshLambertMaterial({color:0xc9c6be});
+  // persiana: baja sola cuando no se puede entrar (ver garageDoor)
+  const shutM=new THREE.MeshStandardMaterial({map:metalT, metalness:0.6, roughness:0.45});
+  GAR.doorM=box(0.12,dh,dw,shutM, fx+0.2, dh/2+0.18, z); GAR.doorM.visible=false; GAR.doorTop=dh+0.18; GAR.doorH=dh;
+  GAR.doorBar=box(0.16,0.1,dw,dark, fx+0.2, 0.2, z); GAR.doorBar.visible=false;
   box(4,0.05,2*GAR.aw, vadoM, fx+2, 0.205, z);                                                           // vado en la acera
   const rampG=new THREE.BoxGeometry(GAR.rl,GAR.h+0.03,2*GAR.aw), rp=rampG.attributes.position;          // rampa en la calzada: cuña que baja hacia la calle
   for (let k=0;k<rp.count;k++) if (rp.getX(k)>0 && rp.getY(k)>0) rp.setY(k, -(GAR.h+0.03)/2+0.01);
@@ -2508,8 +2537,12 @@ function cityCollide(e){
       c.x+=best.nx*best.pen; c.z+=best.nz*best.pen; e.bTouch=0.25;
       const vn=c.vx*best.nx+c.vz*best.nz;
       if (vn<0){
-        c.vx-=1.3*vn*best.nx; c.vz-=1.3*vn*best.nz; c.vx*=0.94; c.vz*=0.94; c.w*=0.3; c.dA=0; c.dBlock=true;   // golpe contra edificio o muro: se acaba el derrape y el giro
-        e.hit=Math.max(e.hit||0, Math.min(1,-vn/15)); SFX.impactAt(c.x,c.z,-vn/16);
+        c.vx-=1.3*vn*best.nx; c.vz-=1.3*vn*best.nz;
+        // el roce frena en proporción al golpe, no por cada contacto: rozar el muro no para el coche
+        const tx=-best.nz, tz=best.nx, vt=c.vx*tx+c.vz*tz, fr=Math.sign(vt)*Math.min(Math.abs(vt), -vn*0.25); c.vx-=fr*tx; c.vz-=fr*tz;
+        if (vn<-4){ c.w*=0.3; c.dA=0; c.dBlock=true; }   // golpe de verdad: se acaba el derrape y el giro
+        else if ((c.vlong||0)>3){ const sg=vt<0?-1:1; c.th+=angDiff(c.th, Math.atan2(sg*tx,sg*tz))*0.012; c.w*=0.97; }   // roce: el morro se endereza a lo largo del muro
+        e.hit=Math.max(e.hit||0, Math.min(1,-vn/15)); if (vn<-1) SFX.impactAt(c.x,c.z,-vn/16);
         noteDamage(e, best.qx, best.qz, clamp(-vn/14,0,1)+0.1, Math.min(1,Math.hypot(c.vx,c.vz)/60));
       }
     }
@@ -2661,6 +2694,14 @@ function placeCity(p, i, j, th){
 }
 const WANT = { t:[0,60,120,210,300], max:[3,5,7,10,14], maxM:[3,4,6,7,8], iv:[30,22,16,12,10], vk:[1,1.05,1.1,1.15,1.2], ram:[1,0.9,0.8,0.7,0.6], cut:[0.3,0.4,0.5,0.55,0.6] };
 const STAR_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.2l-5.8 3.2 1.2-6.5L2.6 9.4l6.5-.8z"/></svg>';
+// Código de la partida: cada estrella amarilla revela un dígito; con la quinta queda ganado hasta que se canjea en CODE
+const codeText = () => [...RUN.code].map((d,i)=>i<RUN.shown?d:'_').join(' ');
+function revealStars(L, quiet){
+  while (RUN.shown<L && RUN.shown<5){ const d=RUN.code[RUN.shown++];
+    if (!quiet) for (const p of alive()) toastP(p, RUN.shown<5 ? 'Estrella '+RUN.shown+' · dígito del código: '+d : 'Código completo: '+RUN.code+' · úsalo en CODE (menú polis)', 'good', RUN.shown<5?2.2:4); }
+  if (RUN.shown>=5 && !PSAVE.earned.includes(RUN.code)){ PSAVE.earned.push(RUN.code); psave(); }
+  $('pCode').textContent=codeText();
+}
 function starsRedHud(blink){
   const el=$('pStarsR'); if (!el.children.length) el.innerHTML=Array.from({length:5},()=>'<span class="st">'+STAR_SVG+'</span>').join('');
   el.hidden = PS.lvl<5;
@@ -2683,7 +2724,8 @@ function startPolice(n){
   trackGroup.visible=false; cityGroup.visible=true; setCityEnv();
   clearDebris(); clearPolice(); clearBags(); closeSplitGarage();
   footReset();
-  Object.assign(RUN, {n, t:0, goldRun:0, iv:35, ns:35, bagT:18, lvl:1, red:0, t5:0, over:false, reason:'', isBest:false, overT:0, stillT:0});
+  Object.assign(RUN, {n, t:0, goldRun:0, iv:35, ns:35, bagT:18, lvl:1, red:0, t5:0, over:false, reason:'', isBest:false, overT:0, stillT:0, code:String(Math.floor(Math.random()*100000)).padStart(5,'0'), shown:0});
+  GAR.open=true; GAR.openK=1; GAR.warn=0;
   mode=n; active=players.slice(0,n);
   players[0].keys = n===1 ? KEYSETS.solo : KEYSETS.wasd; players[1].keys = KEYSETS.arrows;
   players[0].hud.who.textContent = n===1 ? 'Jugador' : 'J1 · WASD';
@@ -2700,7 +2742,7 @@ function startPolice(n){
     placeCity(p, 0, 0, Math.PI/2); garageExit(p);
   }
   bindP(players[0]);
-  document.body.classList.remove('nitro'); starsHud(0); starsRedHud(0);
+  document.body.classList.remove('nitro'); starsHud(0); starsRedHud(0); revealStars(1,true);
   skidCount=0; skidHead=0; skidGeo.setDrawRange(0,0);
   for (const pool of [SMOKE,FIRE]) for (const it of pool.items) it.s.visible=false;
   for (let k=0;k<3*n;k++) spawnPolice('patrol');   // la persecución empieza con 3 patrullas por jugador
@@ -2777,6 +2819,7 @@ function policeFrame(dt){
   }
   { const n0=!two && players[0].ps.nitroOn; document.body.classList.toggle('nitro', n0); SFX.nitroHiss(active.some(p=>p.ps.nitroOn)); }
   // --- policía ---
+  garageDoor(dt);
   copsExit(dt);
   for (const e of POL){ if (e.wrecked) continue; if (e.out || e.empty){ holdStill(e.inp, e.car); continue; }
     e.tgt = nearestTarget(e.car.x, e.car.z);
@@ -2817,7 +2860,7 @@ function policeFrame(dt){
     parkedUpdate(h);
   }
   peopleVsCars(); copsUpdate(dt);
-  for (const p of active){ bindP(p); if (!PS.over && !PED.trans && !PS.garIn) garageCheck(dt); }
+  for (const p of active){ bindP(p); if (!PS.over && !PED.trans && !PED.roll && !PS.garIn) garageCheck(dt); }
   if (!RUN.over){
     RUN.t+=dt;
     // bolsas: las coge cualquiera de los dos; el oro es común
@@ -2828,11 +2871,11 @@ function policeFrame(dt){
     RUN.bagT-=dt; if (RUN.bagT<=0){ RUN.bagT=18/bk; if (BAGS.length<5*bk) spawnBag(); }
     // refuerzos, cada vez más seguidos
     let L=1; while (L<5 && RUN.t>=WANT.t[L]) L++;
-    if (L>RUN.lvl){ RUN.lvl=L; starsHud(L); if (L===5){ SFX.warn(); RUN.t5=RUN.t; starsRedHud(0); } else SFX.level();
+    if (L>RUN.lvl){ RUN.lvl=L; starsHud(L); revealStars(L); if (L===5){ SFX.warn(); RUN.t5=RUN.t; starsRedHud(0); } else SFX.level();
       for (const e of POL) if (e.kind!=='van') e.role = Math.random()<WANT.cut[L-1] ? 'cut':'chase';
       RUN.ns=Math.min(RUN.ns, 0.5); }
     // estrellas rojas: una cada 3 min desde la 5.ª amarilla; cada una trae 3 furgones blindados más
-    if (RUN.lvl===5 && RUN.red<5 && RUN.t-RUN.t5 >= 180*(RUN.red+1)){ RUN.red++; starsRedHud(RUN.red); SFX.redLevel(); { const nb=Math.min(BAGS.length, 5*Math.pow(2,RUN.red)-BAGS.length); for (let k=0;k<nb;k++) spawnBag(); } for (let k=0;k<3;k++) spawnPolice('van'); }
+    if (RUN.lvl===5 && RUN.red<5 && RUN.t-RUN.t5 >= 180*(RUN.red+1)){ RUN.red++; starsRedHud(RUN.red); SFX.redLevel(); PSAVE.gold+=150; RUN.goldRun+=150; psave(); for (const p of alive()) toastP(p,'Estrella roja: +150 oro','good',2); { const nb=Math.min(BAGS.length, 5*Math.pow(2,RUN.red)-BAGS.length); for (let k=0;k<nb;k++) spawnBag(); } for (let k=0;k<3;k++) spawnPolice('van'); }
     RUN.ns-=dt;
     const maxPol = Math.round((IS_MOBILE?WANT.maxM:WANT.max)[RUN.lvl-1]*(two?1.5:1));   // a dos jugadores, más policía
     if (RUN.ns<=0){ RUN.ns=WANT.iv[RUN.lvl-1]*(two?0.75:1);
@@ -3090,15 +3133,25 @@ function garageExit(p){   // coloca al jugador saliendo de la puerta del garaje 
   p.inp.thr=p.inp.brk=p.inp.steer=0; p.inp.nitro=false; p.ps.nitroOn=false; for (const w of p.obj.wheels) w.last=null; p.ps.garArmed=false;
   updateCarVisual(p,0); snapCam(p);
 }
+// ¿está dentro del local? (entre la puerta y la pared del fondo)
+const garInside = o => Math.abs(o.z-GAR.z)<GAR.pw && o.x<GAR.door && o.x>GAR.px0-1;
+// Puerta automática: cerrada si hay policía a menos de 90 m o el garaje está ocupado; levantada en cuanto se puede entrar
+function garageDoor(dt){
+  let near=1e9; for (const e of POL) if (!e.wrecked) near=Math.min(near, Math.hypot(e.car.x-GAR.door,e.car.z-GAR.z));
+  for (const k of COPS) if (k.st!=='dead') near=Math.min(near, Math.hypot(k.x-GAR.door,k.z-GAR.z));
+  const through = active.some(p=>!p.ps.garIn && !p.ps.over && garInside(p.ps.foot?p.ped:p.car));   // nunca se cierra con alguien cruzando
+  GAR.open = through || (!GSPLIT && near>(GAR.open?90:100));
+  GAR.openK = approach(GAR.openK, GAR.open?1:0, dt/0.6);
+  if (GAR.doorM){ const k=GAR.openK, closed=1-k; GAR.doorM.visible=closed>0.02; GAR.doorBar.visible=closed>0.02;
+    GAR.doorM.scale.y=Math.max(0.02,closed); GAR.doorM.position.y=GAR.doorTop-GAR.doorH*closed/2; GAR.doorBar.position.y=GAR.doorTop-GAR.doorH*closed; }
+}
 function garageCheck(dt){
   const p=CUR, me = PS.foot ? PED : p.car, d=Math.hypot(me.x-(GAR.fx+0.5), me.z-GAR.z);
   if (!PS.garArmed){ if (d>14) PS.garArmed=true; return; }
   PS.garWarnT=Math.max(0,PS.garWarnT-dt);
-  const inside = Math.abs(me.z-GAR.z)<GAR.pw && (PS.foot ? me.x<GAR.door-0.6 : me.x+(me.hl||HL)*0.4<GAR.door);   // ya dentro, en lo negro (unos dos tercios del coche)
+  if (!GAR.open && d<9 && PS.garWarnT<=0){ toastP(p, GSPLIT ? 'El garaje está ocupado' : 'Garaje cerrado: hay policía cerca', 'bad', 1.4); PS.garWarnT=2; }
+  const inside = garInside(me) && (PS.foot ? me.x<GAR.door-0.6 : me.x+(me.hl||HL)*0.4<GAR.door);   // ya dentro, en lo negro (unos dos tercios del coche)
   if (!inside || p.wrecked) return;
-  let near=1e9; for (const e of POL) if (!e.wrecked) near=Math.min(near, Math.hypot(e.car.x-me.x,e.car.z-me.z));
-  for (const k of COPS) if (k.st!=='dead') near=Math.min(near, Math.hypot(k.x-me.x,k.z-me.z));
-  if (near<90){ if (PS.garWarnT<=0){ toastP(p,'La policía está demasiado cerca','bad',1.4); PS.garWarnT=2; } return; }
   PS.nitroOn=false; p.inp.nitro=false; if (p.id===0){ document.body.classList.remove('nitro'); SFX.nitroHiss(false); }
   if (RUN.n===2){ if (GSPLIT){ if (PS.garWarnT<=0){ toastP(p,'El garaje está ocupado','',1.4); PS.garWarnT=2; } return; } openSplitGarage(p); return; }
   PS.garRun=true; openGarage(1,'police');
@@ -3129,8 +3182,8 @@ function homeCar(p){ if (!p.homeCar) p.homeCar=p.car; p.car=p.homeCar; Object.as
 function freshCar(){ return {x:0,y:0,z:0,th:0,vx:0,vz:0,w:0,steer:0,vlong:0,vlat:0,slipR:0,slipF:0,idx:0,grass:false,ax:0,pitch:0}; }
 function footResetP(p){   // vuelve a meter al personaje de un jugador en su vehículo
   const s=p.ps, d=p.ped;
-  s.foot=false; d.dead=false; d.trans=null; d.hp=5; d.gun=false; d.ammo=0; d.aim=false; d.fireReq=false;
-  for (const o of Object.values(d.objs||{})){ o.g.visible=false; o.fallK=0; o.aimK=0; o.gun.visible=false; }
+  s.foot=false; d.dead=false; d.trans=null; d.roll=null; d.hp=5; d.gun=false; d.ammo=0; d.aim=false; d.fireReq=false;
+  for (const o of Object.values(d.objs||{})){ o.g.visible=false; o.root.position.set(0,0,0); o.fallK=0; o.aimK=0; o.gun.visible=false; }
 }
 // Personaje a pie: el piloto (mono y casco del color de la moto) si el vehículo elegido es la moto; si no, el prisionero
 function pedModel(p){
@@ -3155,17 +3208,44 @@ function nearVehicle(){
   test(p); for (const e of PARKED) test(e); for (const e of POL) test(e);
   return best;
 }
+// Tirarse en marcha: sale rodando en línea recta con la velocidad del vehículo. A más de 90 km/h cuesta 2 de vida.
+const ROLL_MIN = 10/3.6, ROLL_HURT = 90/3.6, ROLL_DEC = 8;
+function pedJump(p, c, d, cv){
+  const free=(x,z)=>{ const o={x,z}; pushOutBlocks(o,0.3); return Math.hypot(o.x-x,o.z-z)<1e-3; };
+  const sn=Math.sin(c.th), cs=Math.cos(c.th), lx=(c.hw||HWC)+0.55;
+  const o = free(d.x,d.z) ? d : free(c.x-cs*lx,c.z+sn*lx) ? {x:c.x-cs*lx,z:c.z+sn*lx} : {x:c.x,z:c.z};   // por la puerta o por el otro lado; si no cabe, desde el centro
+  PED.x=o.x; PED.z=o.z; PED.vx=c.vx; PED.vz=c.vz; PED.v=cv; PED.th=Math.atan2(c.vx,c.vz); PED.aim=false; PED.sprint=false;
+  PED.roll={own:c, a:0, st:'roll', t:0}; p.cam.yaw=PED.th; c.whT=0;
+  SFX.impactAt(PED.x,PED.z,0.4);
+  if (cv>ROLL_HURT){ PED.hp=Math.max(1,PED.hp-2); PS.flash=1; SFX.hurt(); toastP(p,'−2 vida por tirarte en marcha','bad',1.6); }
+}
+function pedRoll(dt){
+  const R=PED.roll, B=PED.obj;
+  if (R.st==='roll'){
+    const sp=PED.v, nv=Math.max(0,sp-ROLL_DEC*dt), k=sp>0?nv/sp:0; PED.vx*=k; PED.vz*=k; PED.v=nv;
+    PED.x+=PED.vx*dt; PED.z+=PED.vz*dt;
+    const bx=PED.x, bz=PED.z; pushOutBlocks(PED,0.3);
+    if (Math.hypot(PED.x-bx,PED.z-bz)>1e-3 && sp>1){ pedDie('choque', -PED.vx*0.1, -PED.vz*0.1); return; }   // contra un edificio o un muro
+    R.a+=Math.min(sp/0.42,16)*dt; B.fallK=0; posePerson(B,'crouch',dt,0);
+    const h=0.62, a=R.a; B.root.rotation.x=a; B.root.position.set(0, 0.42-h*Math.cos(a), -h*Math.sin(a));   // voltereta alrededor de la cintura
+    if (nv<=0.4){ PED.vx=PED.vz=PED.v=0; R.st='up'; R.t=0; B.root.position.set(0,0,0); B.fallK=1; }
+  } else {
+    R.t+=dt; B.fallK=clamp(1-(R.t-0.25)/0.55,0,1); posePerson(B,'idle',dt,0);
+    if (R.t>0.8){ PED.roll=null; B.fallK=0; }   // ya se ha levantado
+  }
+  placePerson(B,PED); footHud();
+}
 function toggleFoot(){
-  if (!policeMode || paused || PS.over || PS.garIn || PED.trans || PED.dead) return;
+  if (!policeMode || paused || PS.over || PS.garIn || PED.trans || PED.roll || PED.dead) return;
   const p=CUR, c=p.car;
   if (!PS.foot){
     if (p.wrecked) return;
-    if (Math.hypot(c.vx,c.vz) > 30/3.6){ toastP(p,'Frena para salir','',1.0); return; }
+    const cv=Math.hypot(c.vx,c.vz);
     pedModel(p);
     const d=doorPos(c); PS.foot=true; PS.nitroOn=false; p.inp.nitro=false; p.inp.thr=0; p.inp.steer=0; c.lean=0; riderVis(p,false);
     PED.hp=5; PED.dead=false; PED.th=c.th; PED.x=c.x; PED.z=c.z; PED.v=0; PED.vx=PED.vz=0; PED.obj.fallK=0; PED.obj.g.visible=true; PED.obj.aimK=0;
     p.cam.yaw=c.th; p.cam.pitch=0; PED.fireReq=false;
-    PED.trans={dir:'out', t:0, dur:0.45, ax:c.x, az:c.z, bx:d.x, bz:d.z};
+    if (cv>ROLL_MIN) pedJump(p, c, d, cv); else PED.trans={dir:'out', t:0, dur:0.45, ax:c.x, az:c.z, bx:d.x, bz:d.z};
     syncFootClass();
   } else {
     const ent=nearVehicle(); if (!ent){ toastP(p,'No hay ningún vehículo cerca','',1.0); return; }
@@ -3203,6 +3283,7 @@ function pedControl(dt){
     posePerson(B, k<0.6?'walk':'crouch', dt, 2); placePerson(B,PED);
     if (k>=1){ PED.trans=null; if (T.dir==='in') enterVehicle(T.ent); }
     return; }
+  if (PED.roll){ pedRoll(dt); return; }
   const live=!PS.over;
   if (IS_MOBILE || p.id===1){   // móvil y jugador 2 (flechas): girar y correr, sin pistola
     const tc = p.id===0 ? touch : {gas:0, steer:0};
@@ -3238,7 +3319,7 @@ function pedControl(dt){
 const MOUSE = {r:false};
 function lootable(){ let best=null, bd=1.6; for (const k of COPS) if (k.st==='dead' && !k.looted){ const d=Math.hypot(k.x-PED.x,k.z-PED.z); if (d<bd){ bd=d; best=k; } } return best; }
 function pickGun(){   // solo el jugador 1 (el del ratón) puede coger pistolas
-  if (!policeMode || paused || CUR!==players[0] || !PS.foot || PED.dead || PED.trans) return;
+  if (!policeMode || paused || CUR!==players[0] || !PS.foot || PED.dead || PED.trans || PED.roll) return;
   const k=lootable(); if (!k) return;
   k.looted=true; if (k.B.gun) k.B.gun.visible=false;
   PED.gun=true; PED.ammo=5; PED.obj.gun.visible=true; SFX.rack(); toastP(players[0],'Pistola · 5 balas','good',1.2);
@@ -3270,7 +3351,7 @@ function footHud(){   // mira, balas y avisos del jugador 1 (el del ratón)
   document.body.classList.toggle('armed', show && d.gun); document.body.classList.toggle('aiming', show && d.aim);
   if (show && d.gun){ const t='●'.repeat(d.ammo)+'○'.repeat(5-d.ammo); if ($('ammo').dataset.t!==t){ $('ammo').dataset.t=t; $('ammoPips').textContent=t; } }
   let hint='';
-  if (show && !d.trans){ const pc=CUR; bindP(p); const k=lootable(); bindP(pc); if (k && (!d.gun || d.ammo<5)) hint='E · Coger la pistola'; else if (document.pointerLockElement!==renderer.domElement && !paused) hint='Haz clic para mirar con el ratón'; }
+  if (show && !d.trans && !d.roll){ const pc=CUR; bindP(p); const k=lootable(); bindP(pc); if (k && (!d.gun || d.ammo<5)) hint='E · Coger la pistola'; else if (document.pointerLockElement!==renderer.domElement && !paused) hint='Haz clic para mirar con el ratón'; }
   const h=$('footHint'); if (h.textContent!==hint){ h.textContent=hint; h.hidden=!hint; }
 }
 const j1foot = () => { const s=players[0].ps; return policeMode && s.foot && !s.over && !players[0].ped.dead; };
@@ -3306,7 +3387,7 @@ function spawnCop(e, mode){
   COPS.push(k); return k;
 }
 function copDie(k, vx, vz){ if (k.st==='dead') return; k.st='dead'; k.t=0; k.fv={x:vx*0.5, z:vz*0.5}; if (k.car && k.car.out===k){ k.car.out=null; k.car.empty=true; } SFX.impactAt(k.x,k.z,0.5); }
-function pedDie(reason, vx, vz){ if (PED.dead) return; PED.dead=true; PED.fallV={x:(vx||0)*0.5, z:(vz||0)*0.5}; PS.flash=1; SFX.alert(); caught(reason); }
+function pedDie(reason, vx, vz){ if (PED.dead) return; PED.dead=true; if (PED.roll){ PED.roll=null; PED.v=0; if (PED.obj) PED.obj.root.position.set(0,0,0); } PED.fallV={x:(vx||0)*0.5, z:(vz||0)*0.5}; PS.flash=1; SFX.alert(); caught(reason); }
 function copNav(k, tx, tz){   // camino por la cuadrícula de calles si no hay visión directa
   if (los(k.x,k.z,tx,tz)) return {x:tx, z:tz};
   const P_=CITY.PITCH, h=CITY.SW/2, gi=k.x/P_, gj=k.z/P_, ti=clampNode(Math.round(tx/P_)), tj=clampNode(Math.round(tz/P_));
@@ -3374,6 +3455,9 @@ function peopleVsCars(){
   const pc=CUR;
   for (const E of ents){ const c=E.c, v=Math.hypot(c.vx,c.vz);
     for (const p of active){ const d=p.ped; if (!p.ps.foot || d.dead || d.trans || !touchCar(c,d.x,d.z,0.3)) continue;
+      if (d.roll && d.roll.st==='roll'){   // rodando: su propio vehículo no cuenta; cualquier otro lo mata (atropello o choque)
+        if (c!==d.roll.own){ bindP(p); pedDie(v>3?'atropello':'choque', c.vx, c.vz); }
+        continue; }
       if (E.pol && v>3){ bindP(p); pedDie('atropello', c.vx, c.vz); } else pushOutCar(d, c, 0.3); }
     for (const k of COPS){ if (k.st==='dead') continue; if (touchCar(c,k.x,k.z,0.3)){ if (v>3) copDie(k, c.vx, c.vz); else pushOutCar(k,c,0.3); } }
   }
@@ -3433,6 +3517,7 @@ function policeHud(dt){
   bindP(pc);
 }
 const pmap=$('pmap');
+const MATE_COL = ['#2fd35a','#ff8a1f'];   // jugador 1 verde, jugador 2 naranja
 function drawPoliceMap(pl, cv){
   const W=cv.width, R=W/2, p=pl.ps.foot?pl.ped:pl.car, s=R/170;
   const g=cv.getContext('2d'); g.clearRect(0,0,W,W);
@@ -3449,9 +3534,11 @@ function drawPoliceMap(pl, cv){
     g.save(); g.translate(gx,gz); g.rotate(Math.PI/2+Math.atan2(Math.cos(p.th),Math.sin(p.th))); const u=1/s; g.fillStyle='#ffffff';
     g.beginPath(); g.moveTo(0,-7*u); g.lineTo(7*u,-1*u); g.lineTo(4.5*u,-1*u); g.lineTo(4.5*u,6*u); g.lineTo(-4.5*u,6*u); g.lineTo(-4.5*u,-1*u); g.lineTo(-7*u,-1*u); g.closePath(); g.fill(); g.restore(); }
   for (const e of POL){ const big=e.kind!=='patrol'; dot(e.car.x,e.car.z,big?11:9,'#ffffff'); dot(e.car.x,e.car.z,big?9:7,(fl?'#ff3b30':'#2f6bff')); }
+  if (RUN.n===2){ const m=players[1-pl.id], o=m.ps.foot?m.ped:m.car, mx=(R-16)/s; let dx=o.x-p.x, dz=o.z-p.z; const dd=Math.hypot(dx,dz);   // el compañero, siempre visible: si está lejos, en el borde del mapa
+    if (dd>mx){ dx*=mx/dd; dz*=mx/dd; } dot(p.x+dx,p.z+dz,12,'#ffffff'); dot(p.x+dx,p.z+dz,10,MATE_COL[m.id]); }
   g.restore();
   // jugador: flecha hacia arriba en el centro
-  g.fillStyle='#ffffff'; g.strokeStyle='#111'; g.lineWidth=3; g.beginPath(); g.moveTo(R,R-16); g.lineTo(R+11,R+12); g.lineTo(R,R+6); g.lineTo(R-11,R+12); g.closePath(); g.stroke(); g.fill();
+  g.fillStyle=RUN.n===2?MATE_COL[pl.id]:'#ffffff'; g.strokeStyle=RUN.n===2?'#ffffff':'#111'; g.lineWidth=3; g.beginPath(); g.moveTo(R,R-16); g.lineTo(R+11,R+12); g.lineTo(R,R+6); g.lineTo(R-11,R+12); g.closePath(); g.stroke(); g.fill();
   g.strokeStyle='rgba(255,255,255,.25)'; g.lineWidth=4; g.beginPath(); g.arc(R,R,R-2,0,Math.PI*2); g.stroke();
 }
 
@@ -3508,12 +3595,55 @@ function refreshGarage(){
     box.innerHTML = '<div class="price'+(un?' free':'')+'">'+(un?'Desbloqueado':lock+pr+' oro')+'</div><p class="stats">Vida '+st.hp+' · 0–170 km/h en '+st.t170+' s · Punta '+st.top+' km/h</p>';
     if (!un){ if (PSAVE.gold>=pr) pick.textContent='Desbloquear · '+pr+' oro'; else { pick.textContent='Bloqueado · te faltan '+(pr-PSAVE.gold)+' oro'; pick.disabled=true; } }
   }
+  const sb=$('gSpin'); sb.hidden=!pol; if (pol){ sb.textContent='Ruleta · '+WHEEL_COST+' oro'; sb.disabled=PSAVE.gold<WHEEL_COST && !WH.free; }
   const mate = GSPLIT && players[1-GSPLIT.id], resc = !!(mate && mate.ps.over), rb=$('gRescue');
   $('garageUI').classList.toggle('rescue', resc);
   if (resc){ rb.textContent='Rescatar a J'+(mate.id+1)+' · '+RESCUE_PRICE+' oro'; rb.disabled = PSAVE.gold<RESCUE_PRICE; }
   document.querySelector('.gHint').textContent = !GSPLIT ? 'Arrastra para girar el coche · flechas para cambiar de modelo'
-    : GSPLIT.id===0 ? 'A / D cambiar · Espacio elegir'+(resc?' · S rescatar':'')+' · F salir' : '← / → cambiar · Shift dcho. elegir'+(resc?' · ↓ rescatar':'')+' · Enter salir';
+    : GSPLIT.id===0 ? 'A / D cambiar · Espacio elegir · W ruleta'+(resc?' · S rescatar':'')+' · F salir' : '← / → cambiar · Shift dcho. elegir · ↑ ruleta'+(resc?' · ↓ rescatar':'')+' · Enter salir';
 }
+// Ruleta del garaje polis: 1000 de oro por tirada
+const WHEEL_COST = 1000, WHEEL_SEG = [
+  {t:'50 oro', gold:50, w:26, c:'#2a2f38'}, {t:'Coche', car:true, w:10, c:'#c8161d'}, {t:'100 oro', gold:100, w:22, c:'#3a4150'}, {t:'Nada', w:10, c:'#14171d'},
+  {t:'250 oro', gold:250, w:14, c:'#2a2f38'}, {t:'Gratis', free:true, w:8, c:'#1f7a3a'}, {t:'500 oro', gold:500, w:8, c:'#3a4150'}, {t:'3000 oro', gold:3000, w:2, c:'#d8a200'}];
+const WH = {open:false, spin:false, free:false, rot:0};
+function wheelDraw(){
+  const cv=$('wheelC'), g=cv.getContext('2d'), R=cv.width/2, n=WHEEL_SEG.length, a=Math.PI*2/n;
+  WHEEL_SEG.forEach((q,i)=>{ const a0=-Math.PI/2+i*a;
+    g.fillStyle=q.c; g.beginPath(); g.moveTo(R,R); g.arc(R,R,R,a0,a0+a); g.closePath(); g.fill();
+    g.strokeStyle='rgba(255,255,255,.25)'; g.lineWidth=2; g.stroke();
+    g.save(); g.translate(R,R); g.rotate(a0+a/2); g.fillStyle='#fff'; g.font='800 34px "Saira Condensed","Arial Narrow",sans-serif'; g.textAlign='right'; g.textBaseline='middle'; g.fillText(q.t,R-22,0); g.restore(); });
+  g.fillStyle='#14171d'; g.beginPath(); g.arc(R,R,30,0,Math.PI*2); g.fill();
+}
+function wheelSync(){
+  const go=$('wheelGo'); go.textContent = WH.free ? 'Girar ruleta · gratis' : 'Girar ruleta · '+WHEEL_COST+' oro';
+  go.disabled = WH.spin || (!WH.free && PSAVE.gold<WHEEL_COST); $('wheelClose').disabled=WH.spin;
+}
+function wheelOpen(){ if (WH.open) return; WH.open=true; wheelDraw(); $('wheelMsg').textContent='Oro: '+PSAVE.gold; $('wheelBox').hidden=false; wheelSync(); }
+function wheelClose(){ if (WH.spin) return; WH.open=false; $('wheelBox').hidden=true; refreshGarage(); }
+function wheelSpin(){
+  if (WH.spin || (!WH.free && PSAVE.gold<WHEEL_COST)) return;
+  if (WH.free) WH.free=false; else { PSAVE.gold-=WHEEL_COST; psave(); }
+  let r=Math.random()*WHEEL_SEG.reduce((s,q)=>s+q.w,0), idx=0; for (let i=0;i<WHEEL_SEG.length;i++){ r-=WHEEL_SEG[i].w; if (r<0){ idx=i; break; } }
+  const seg=360/WHEEL_SEG.length, off=(0.15+Math.random()*0.7-0.5)*seg, target=360-(idx+0.5)*seg-off;
+  WH.rot += 360*5 + (((target-WH.rot)%360)+360)%360; WH.spin=true; wheelSync(); SFX.swish();
+  const dur=reduceMotion?0.2:4, cv=$('wheelC'); cv.style.transition='transform '+dur+'s cubic-bezier(.12,.7,.08,1)'; cv.style.transform='rotate('+WH.rot+'deg)';
+  $('wheelMsg').textContent='Girando…';
+  setTimeout(()=>{ WH.spin=false; wheelPrize(WHEEL_SEG[idx]); }, dur*1000+80);
+}
+function wheelPrize(q){
+  let m;
+  if (q.gold){ PSAVE.gold+=q.gold; m='+'+q.gold+' oro'; SFX.pickup(); }
+  else if (q.free){ WH.free=true; m='¡Tirada gratis!'; SFX.pickup(); }
+  else if (q.car){ const lk=PRICES.map((_,i)=>i).filter(i=>!isUnlocked(i));
+    if (lk.length){ const i=lk[Math.random()*lk.length|0]; PSAVE.unlocked.push(i); gModel=i; if (MODELS[i].scan) gColor='#c8161d'; m='¡'+MODELS[i].name+' desbloqueado!'; }
+    else { PSAVE.gold+=WHEEL_COST; m='Ya los tienes todos: te devolvemos '+WHEEL_COST+' oro'; }
+    SFX.pickup(); }
+  else m='Nada. Otra vez será';
+  psave(); $('wheelMsg').textContent=m+' · Oro: '+PSAVE.gold; wheelSync(); refreshGarage();
+}
+$('wheelGo').addEventListener('click',wheelSpin); $('wheelClose').addEventListener('click',wheelClose);
+$('gSpin').addEventListener('click',wheelOpen);
 const SPK_ON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
 const SPK_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M17 9l5 6M22 9l-5 6"/></svg>';
 function syncMute(){ const off=SFX.muted||SFX.vol===0; $('muteBtn').innerHTML=off?SPK_OFF:SPK_ON; $('muteBtn').setAttribute('aria-label', off?'Activar sonido':'Silenciar sonido');
@@ -3653,30 +3783,35 @@ function showMenu(state){
   const add=(txt,fn,primary,sub)=>{ const e=document.createElement('button'); e.type='button'; e.textContent=txt;
     if (sub){ const sm=document.createElement('small'); sm.textContent=sub; e.appendChild(sm); }
     if (primary) e.className='primary'; if (fn) e.addEventListener('click',fn); else e.disabled=true; b.appendChild(e); return e; };
-  $('menuHelp').hidden = state==='title' || state==='police' || state==='caught';
-  if (state==='title' || state==='mode') exitPolice();
+  $('menuHelp').hidden = state==='title' || state==='mode' || state==='police' || state==='caught';
+  if (state==='title' || state==='mode' || state==='race') exitPolice();
   if (state==='title'){
     $('menuTitle').innerHTML='Fast and <span>Fuñius</span>'; $('menuSub').textContent='Siete coches, una moto, seis circuitos y una sola regla: a fondo.';
     add('Jugar',()=>{ goFullscreen(); showMenu('mode'); },true).focus();
-    codeBar(b);
   } else if (state==='mode'){
-    $('menuTitle').textContent='Elige modo'; $('menuSub').textContent = IS_MOBILE ? 'En móvil se juega en solitario.' : 'Multijugador: dos coches a pantalla dividida en este ordenador.';
+    $('menuTitle').textContent='Elige modo'; $('menuSub').textContent='Carreras en circuito o huir de la policía por la ciudad.';
+    add('Modo carrera',()=>showMenu('race'),true,'Seis circuitos, solo o a pantalla dividida').focus();
+    add('Modo polis',()=>showMenu('police'),false,'Huye de la policía por la ciudad y gana oro');
+    add('Volver',()=>showMenu('title'));
+  } else if (state==='race'){
+    $('menuTitle').textContent='Modo carrera'; $('menuSub').textContent = IS_MOBILE ? 'En móvil se juega en solitario.' : 'Multijugador: dos coches a pantalla dividida en este ordenador.';
     add('Un jugador',()=>openGarage(1,'mode'),true).focus();
     if (IS_MOBILE) add('Multijugador',null,false,'No disponible en móvil');
     else add('Multijugador',()=>openGarage(2,'mode'));
-    add('POLICE',()=>showMenu('police'),false,'Huye de la policía por la ciudad y gana oro');
+    add('Volver',()=>showMenu('mode'));
   } else if (state==='police'){
     const sel=MODELS[PSAVE.sel.model];
-    $('menuTitle').textContent='POLICE';
-    $('menuSub').innerHTML='Aguanta todo lo que puedas sin que te atrapen. Pierdes si te quedas sin vida (golpes de frente de la policía a más de 100 km/h) o si te bloquean 3 s.<br><b>Oro: '+PSAVE.gold+'</b> · Mejor tiempo: '+(PSAVE.best?fmtT(PSAVE.best):'—');
+    $('menuTitle').textContent='Modo polis';
+    $('menuSub').innerHTML='Aguanta todo lo que puedas sin que te atrapen. Pierdes si te quedas sin vida (golpes de frente de la policía a más de 100 km/h) o si te bloquean 3 s.<br><b>Oro: '+PSAVE.gold+'</b> · Mejor tiempo: '+(PSAVE.best?fmtT(PSAVE.best):'—')+(PSAVE.earned.length?'<br>Códigos sin canjear: <b>'+PSAVE.earned.join(', ')+'</b>':'');
     add(IS_MOBILE?'Jugar':'Un jugador',()=>{ goFullscreen(); startPolice(1); },true,'Con '+sel.name).focus();
     if (!IS_MOBILE) add('Dos jugadores',()=>openGarage(2,'police'),false,'Pantalla dividida · J1 WASD + ratón · J2 flechas');
     add('Garaje POLICE',()=>openGarage(1,'police'));
     add('Volver',()=>showMenu('mode'));
+    codeBar(b);
   } else if (state==='caught'){
     const R=RUN, two=R.n===2;
     $('menuTitle').textContent= two ? 'OS HAN PILLADO' : 'ATRAPADO';
-    $('menuSub').innerHTML=(two ? 'Han caído los dos. ' : ({bloqueo:'Te han bloqueado. ', atropello:'Te ha atropellado la policía. ', disparos:'Te han abatido a tiros. '}[R.reason]||'Te has quedado sin vida. '))+'<br>Tiempo: <b>'+fmtT(R.t)+'</b> · Oro ganado: <b>'+R.goldRun+'</b><br>Nivel de búsqueda máximo: <b style="color:#ffd23a">'+'★'.repeat(R.lvl)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.lvl)+'</span> ('+R.lvl+'/5)'+(R.lvl>=5?' · rojas: <b style="color:#ff2a1f">'+'★'.repeat(R.red)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.red)+'</span> ('+R.red+'/5)':'')+'<br>Mejor tiempo: <b>'+fmtT(PSAVE.best||0)+'</b>'+(R.isBest?' (¡nuevo récord!)':'')+' · Oro total: <b>'+PSAVE.gold+'</b>';
+    $('menuSub').innerHTML=(two ? 'Han caído los dos. ' : ({bloqueo:'Te han bloqueado. ', atropello:'Te ha atropellado la policía. ', disparos:'Te han abatido a tiros. ', choque:'Te has estampado al tirarte en marcha. '}[R.reason]||'Te has quedado sin vida. '))+'<br>Tiempo: <b>'+fmtT(R.t)+'</b> · Oro ganado: <b>'+R.goldRun+'</b><br>Nivel de búsqueda máximo: <b style="color:#ffd23a">'+'★'.repeat(R.lvl)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.lvl)+'</span> ('+R.lvl+'/5)'+(R.lvl>=5?' · rojas: <b style="color:#ff2a1f">'+'★'.repeat(R.red)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.red)+'</span> ('+R.red+'/5)':'')+'<br>Código: <b>'+codeText()+'</b>'+(RUN.shown>=5?' (úsalo en CODE, menú polis)':'')+'<br>Mejor tiempo: <b>'+fmtT(PSAVE.best||0)+'</b>'+(R.isBest?' (¡nuevo récord!)':'')+' · Oro total: <b>'+PSAVE.gold+'</b>';
     add('Otra vez',()=>startPolice(R.n),true).focus();
     add('Garaje POLICE',()=>openGarage(1,'police'));
     add('Menú POLICE',()=>showMenu('police'));
@@ -3693,11 +3828,11 @@ function showMenu(state){
     add('Reiniciar',()=>{ restartAll(); resume(); });
     add('Cambiar coche',()=>openGarage(mode,'pause'));
     add('Cambiar circuito',()=>openTrack('pause'));
-    if (!IS_MOBILE) add(mode===1?'Cambiar a multijugador':'Cambiar a un jugador',()=>showMenu('mode'));
+    if (!IS_MOBILE) add(mode===1?'Cambiar a multijugador':'Cambiar a un jugador',()=>showMenu('race'));
   }
 }
-// Barra CODE del menú principal: al pulsarla se escribe ahí mismo un código. 12345 da 2.000 de oro una sola vez por partida guardada.
-const CODES = {'12345': {gold:2000}};
+// Barra CODE del menú polis: los códigos se ganan dígito a dígito con las estrellas (ver revealStars). Cada uno vale 2.000 de oro y solo una vez.
+const CODE_GOLD = 2000;
 function codeBar(parent){
   const box=document.createElement('div'); box.className='codeBox';
   const btn=document.createElement('button'); btn.type='button'; btn.textContent='Code';
@@ -3709,11 +3844,10 @@ function codeBar(parent){
     inp.addEventListener('keydown', e=>{ e.stopPropagation();   // que las teclas no muevan el juego ni abran paneles
       if (e.key==='Escape'){ inp.replaceWith(btn); msg.textContent=''; return; }
       if (e.key!=='Enter') return;
-      const c=CODES[inp.value.trim()], used=PSAVE.codes||(PSAVE.codes=[]);
-      if (!c){ msg.textContent='Código incorrecto'; msg.className='codeMsg bad'; inp.select(); return; }
-      if (used.includes(inp.value.trim())){ msg.textContent='Ese código ya está usado'; msg.className='codeMsg bad'; inp.select(); return; }
-      used.push(inp.value.trim()); PSAVE.gold+=c.gold; psave();
-      msg.textContent='¡Código correcto! +'+c.gold.toLocaleString('es-ES')+' oro · Total: '+PSAVE.gold.toLocaleString('es-ES'); msg.className='codeMsg ok'; SFX.pickup();
+      const v=inp.value.trim(), i=PSAVE.earned.indexOf(v);
+      if (i<0){ msg.textContent='Código incorrecto'; msg.className='codeMsg bad'; inp.select(); return; }
+      PSAVE.earned.splice(i,1); PSAVE.gold+=CODE_GOLD; psave();
+      msg.textContent='¡Código correcto! +'+CODE_GOLD.toLocaleString('es-ES')+' oro · Total: '+PSAVE.gold.toLocaleString('es-ES'); msg.className='codeMsg ok'; SFX.pickup();
       inp.replaceWith(btn);
     });
     inp.addEventListener('keyup', e=>e.stopPropagation());
@@ -3721,7 +3855,7 @@ function codeBar(parent){
 }
 function openGarage(n, from){
   clearCaughtFx();
-  hideOverlays(); paused=true; menuState='garage'; document.body.classList.add('inmenu');
+  hideOverlays(); paused=true; menuState='garage'; document.body.classList.add('inmenu'); WH.open=false; $('wheelBox').hidden=true;
   if (from!=='police' && from!=='pause') exitPolice();
   pendingMode=n; gReturn=from; gPlayer=0;
   const src = from==='police' ? PSAVE.sel : players[0].sel;
@@ -3738,7 +3872,7 @@ function openSplitGarage(p){
   garageCamFit(); refreshGarage(); SFX.ui();
 }
 function closeSplitGarage(){
-  if (!GSPLIT) return; GSPLIT.ps.garIn=false; GSPLIT.hud.v.classList.remove('ingar'); document.body.classList.remove('gar1','gar2'); GSPLIT=null;
+  if (!GSPLIT) return; WH.open=false; $('wheelBox').hidden=true; GSPLIT.ps.garIn=false; GSPLIT.hud.v.classList.remove('ingar'); document.body.classList.remove('gar1','gar2'); GSPLIT=null;
   const ui=$('garageUI'); ui.hidden=true; ui.classList.remove('split','half-l','half-r','rescue'); garageCamFit();
 }
 function garageRescue(){   // pagar para que vuelva el compañero al que han pillado
@@ -3768,7 +3902,7 @@ function garageBack(){
   if (GSPLIT){ const p=GSPLIT; closeSplitGarage(); bindP(p); garageLeave(); bindP(players[0]); return; }
   if (gPlayer===1){ gPlayer=0; const s = gReturn==='police' ? PSAVE.sel : players[0].sel; gModel=s.model; gColor=s.color; refreshGarage(); return; }
   if (gReturn==='police' && players[0].ps.garRun){ bindP(players[0]); PS.garRun=false; hideOverlays(); garageLeave(); resume(); return; }
-  if (gReturn==='pause') showMenu('pause'); else if (gReturn==='police') showMenu('police'); else showMenu('mode');
+  if (gReturn==='pause') showMenu('pause'); else if (gReturn==='police') showMenu('police'); else showMenu('race');
 }
 function openTrack(from){
   hideOverlays(); paused=true; menuState='track'; document.body.classList.add('inmenu'); trackReturn=from;
