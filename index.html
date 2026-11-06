@@ -2790,6 +2790,7 @@ function rescue(p){   // el compañero vuelve a la partida saliendo del garaje, 
   toastP(p,'¡De vuelta a la calle!','good',2);
   bindP(pc);
 }
+const HEADON_MIN=50;   // km/h: por debajo, un toque de frente no daña a la policía aunque yo vaya más rápido
 function ramDamage(e, vE){
   const v=vE*3.6;
   let d=Math.round(2+(v-100)/25); if (e.kind==='suv') d=Math.ceil(d*1.5);
@@ -2839,13 +2840,15 @@ function policeFrame(dt){
         if (r){ e.touchT=0.3; e.touchP=p;
           // golpe con el morro de la policía: la normal del choque apunta a lo largo de su eje (sea cual sea la zona de mi coche que reciba el golpe)
           const ec=e.car, dF=-(r.nx*Math.sin(ec.th)+r.nz*Math.cos(ec.th));
+          const pF=r.nx*Math.sin(c.th)+r.nz*Math.cos(c.th), headOn=dF>0.55 && pF>0.55;   // de frente: se encuentran los dos morros
+          if (headOn && vP>150/3.6) e.ramCD=Math.max(e.ramCD,0.5);   // a más de 150 no me hace daño, tampoco en el rebote de este mismo choque
           if (!PS.over && !PS.foot && dF>0.55 && vE>100/3.6 && e.ramCD<=0){
             e.ramCD=WANT.ram[PS.lvl-1]; const d=ramDamage(e, vE); PS.hp=Math.max(0,PS.hp-d); PS.flash=1; SFX.alert(); toastP(p,'−'+d+' vida','bad',1.2);
             if (PS.hp<=0) caught('vida');
           }
-          // mi morro contra cualquier parte de la policía que no sea su frontal, a más de 150 km/h: le quito vida
-          const pF=r.nx*Math.sin(c.th)+r.nz*Math.cos(c.th);
-          if (!PS.over && !PS.foot && pF>0.55 && dF<=0.55 && vP>150/3.6 && e.hitCD<=0){
+          // le quito vida: de frente si voy más rápido que él; por cualquier otra parte, con mi morro a más de 150 km/h
+          const iHit = headOn ? (vP>vE && vP>HEADON_MIN/3.6) : (pF>0.55 && vP>150/3.6);
+          if (!PS.over && !PS.foot && iHit && e.hitCD<=0){
             e.hitCD=0.5; e.hp--;
             const maxH = e.kind==='van'?4 : e.kind==='suv'?3 : 2;
             if (e.hp<=0){ policeExplode(e); PS.hp=PS.maxHp;   // cada policía destruido rellena toda la vida
