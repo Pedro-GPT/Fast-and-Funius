@@ -2640,7 +2640,7 @@ function policeExplode(e){
   for (const p of active) if (Math.hypot(p.car.x-c.x,p.car.z-c.z)<60) p.hit=Math.max(p.hit,0.6);
 }
 // La Rampa: el coche que le entra por delante sale volando por encima, da vueltas y al caer pierde un golpe
-const RAMP_G=11.8, RAMP_MIN=8;   // gravedad del vuelo y velocidad mínima de choque (m/s, unos 30 km/h) para salir lanzado
+const RAMP_G=11.8, RAMP_MIN=8, RAMP_FLIP=0.5;   // RAMP_FLIP: probabilidad de caer boca abajo y explotar   // gravedad del vuelo y velocidad mínima de choque (m/s, unos 30 km/h) para salir lanzado
 function copHurt(p, e){   // un golpe a la policía; si era el último, explota y me rellena la vida
   const maxH = e.kind==='van'?4 : e.kind==='suv'?3 : 2; e.hp--;
   if (e.hp<=0){ policeExplode(e); p.ps.hp=p.ps.maxHp;
@@ -2648,20 +2648,24 @@ function copHurt(p, e){   // un golpe a la policía; si era el último, explota 
   else toastP(p,'Golpe a la policía · '+(maxH-e.hp)+'/'+maxH,'good',1.2);
 }
 function rampLaunch(e, p, closing){
-  const c=e.car, m=p.car, vy=clamp(closing*0.47,6,11), T=2*vy/RAMP_G, turns=Math.max(1,Math.round(T*0.7));
-  const dx=c.x-m.x, dz=c.z-m.z, dl=Math.hypot(dx,dz)||1, back=Math.max(closing*0.12, 11/T);   // va conmigo y se queda atrás poco a poco: pasa por encima de mí y cae detrás, a la vista de la cámara
-  e.air={p, vy, rp:-2*Math.PI*turns/T, rr:(Math.random()<0.5?-1:1)*2*Math.PI*(Math.random()<0.5?0:1)/T, ry:rnd(-1,1)};
-  c.vx=m.vx-dx/dl*back; c.vz=m.vz-dz/dl*back; c.y=0.25; c.w=0; c.pitch=0; c.roll=0; c.vlong=c.vlat=c.slipR=c.slipF=0; e.inp.thr=0; e.inp.hb=false;
+  // cae de pie (pierde un golpe) o boca abajo (explota): el giro está calculado para acabar justo en una de las dos posturas
+  const c=e.car, m=p.car, vy=clamp(closing*0.47,6,11), flip=Math.random()<RAMP_FLIP;
+  const hR=flip ? Math.max(...MODELS[e.obj.model].roof.map(r=>r[1])) : 0;   // boca abajo toca el suelo con el techo
+  const T=(vy+Math.sqrt(Math.max(0,vy*vy-2*RAMP_G*(hR-0.25))))/RAMP_G, turns=Math.max(1,Math.round(T*0.7)), ang=2*Math.PI*turns-(flip?Math.PI:0);
+  const dx=c.x-m.x, dz=c.z-m.z, dl=Math.hypot(dx,dz)||1, back=Math.max(closing*0.35, 8);   // sale hacia atrás (en sentido contrario a mi marcha) y me pasa por encima
+  e.air={p, vy, flip, hR, rp:-ang/T, rr:(Math.random()<0.5?-1:1)*2*Math.PI*(Math.random()<0.5?0:1)/T, ry:rnd(-1,1)};
+  c.vx=-dx/dl*back; c.vz=-dz/dl*back; c.y=0.25; c.w=0; c.pitch=0; c.roll=0; c.vlong=c.vlat=c.slipR=c.slipF=0; e.inp.thr=0; e.inp.hb=false;
   for (let i=0;i<18*PQ;i++) spawn(FIRE,{x:c.x+rnd(-.8,.8),y:rnd(0.1,0.7),z:c.z+rnd(-.8,.8),vx:rnd(-6,6),vy:rnd(1,7),vz:rnd(-6,6),life:rnd(0.15,0.4),s0:0.4,s1:0.1,a:1,c0:0xfff0b0,c1:0xff7a20,drag:0.9});
   p.hit=Math.max(p.hit,0.35); SFX.impactAt(c.x,c.z,1); toastP(p,'¡A volar!','good',1);
 }
 function rampFly(e, h){
   const a=e.air, c=e.car; c.y+=a.vy*h; a.vy-=RAMP_G*h; c.x+=c.vx*h; c.z+=c.vz*h; c.pitch+=a.rp*h; c.roll+=a.rr*h; c.th+=a.ry*h;
   const y=c.y, pi=c.pitch; cityCollide(e); c.y=y; c.pitch=pi;   // los edificios lo paran, pero sigue en el aire
-  if (c.y>0 || a.vy>0) return;
-  e.air=null; c.y=0; c.pitch=0; c.roll=0; c.vx*=0.35; c.vz*=0.35; c.vlong=c.vlat=0; e.wp=null; SFX.impactAt(c.x,c.z,1);
+  if (c.y>a.hR || a.vy>0) return;
+  e.air=null; c.y=a.hR; c.pitch=a.flip?Math.PI:0; c.roll=0; c.vx*=0.35; c.vz*=0.35; c.vlong=c.vlat=0; e.wp=null; SFX.impactAt(c.x,c.z,1);
   for (let i=0;i<14*PQ;i++) spawn(SMOKE,{x:c.x+rnd(-1.5,1.5),y:0.3,z:c.z+rnd(-1.5,1.5),vx:rnd(-4,4),vy:rnd(0.5,2.5),vz:rnd(-4,4),life:rnd(0.8,1.6),s0:1,s1:4,a:0.5,c0:0x8a8580,drag:0.95,fadeIn:true});
-  copHurt(a.p, e);
+  if (a.flip){ e.hp=1; copHurt(a.p, e); updateCarVisual(e,0); }   // boca abajo: explota y se queda volcado
+  else copHurt(a.p, e);
 }
 // Incógnito: si robo un coche de policía sin testigos, nadie sabe dónde estoy hasta que choque con un policía
 const WITNESS_D=150;
