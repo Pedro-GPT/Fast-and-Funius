@@ -3262,7 +3262,7 @@ function enterVehicle(ent){
     if (fromPol){
       if (ent.out) ent.out.car=null; else if (!ent.empty) spawnCop(ent,'push');   // saca al policía a empujones
       const maxH = ent.kind==='van'?4 : ent.kind==='suv'?3 : 2;
-      ent.vmax=20; ent.vhp=Math.max(1, Math.round(20*ent.hp/maxH));   // vida del coche robado según los golpes que ya lleve
+      ent.vmax = ent.kind==='van'?60:20; ent.vhp=Math.max(1, Math.round(ent.vmax*ent.hp/maxH));   // vida del coche robado según los golpes que ya lleve (el furgón blindado, 60)
       POL.splice(POL.indexOf(ent),1); ent.lights[0].emissiveIntensity=0.2; ent.lights[1].emissiveIntensity=0.2;
     } else PARKED.splice(PARKED.indexOf(ent),1);
     PARKED.push({obj:p.obj, car:p.car, inp:{thr:0,brk:1,steer:0,hb:false}, wrecked:p.wrecked, hit:0, dmg:0, dmgX:0, dmgZ:0, scratchT:0, id:'parked', vhp:PS.hp, vmax:PS.maxHp});   // cada coche guarda su vida
@@ -3328,8 +3328,7 @@ function pickGun(){   // solo el jugador 1 (el del ratón) puede coger pistolas
   PED.gun=true; PED.ammo=5; PED.obj.gun.visible=true; SFX.rack(); toastP(players[0],'Pistola · 5 balas','good',1.2);
 }
 function pedShoot(p){
-  const cam=p.camera, o=cam.position, d=cam.getWorldDirection(_v2), spr = PED.aim ? 0.004 : 0.05+0.02*Math.min(1,PED.v/4);
-  d.x+=rnd(-spr,spr); d.y+=rnd(-spr,spr)*0.7; d.z+=rnd(-spr,spr); d.normalize();
+  const cam=p.camera, o=cam.position, d=cam.getWorldDirection(_v2);   // puntería perfecta: la bala va justo a la mira
   const t0=Math.max(0.5, Math.hypot(PED.x-o.x, PED.z-o.z)-0.4), cars=allCars();
   let hit=null, t=t0, x=0, y=0, z=0, what='air';
   for (; t<130; t+=0.2){ x=o.x+d.x*t; y=o.y+d.y*t; z=o.z+d.z*t;
@@ -3447,6 +3446,7 @@ function copShoot(k, tgt, d){
   spawn(FIRE,{x:gx,y:gy,z:gz,vx:sn*2,vy:0,vz:cs*2,life:0.07,s0:0.35,s1:0.15,a:1,c0:0xfff0b0,c1:0xff9a30});
   SFX.shot(gx,gz);
   if (!hit) return;
+  if (!PS.foot && !CUR.obj.bike){ SFX.impactAt(tgt.x,tgt.z,0.2); return; }   // dentro de un coche las balas no quitan vida; en la moto y a pie, sí
   PS.flash=1; SFX.hurt();
   if (PS.foot){ PED.hp=Math.max(0,PED.hp-1); toastP(CUR,'−1 vida','bad',0.8); if (PED.hp<=0) pedDie('disparos', sn*3, cs*3); }
   else { PS.hp=Math.max(0,PS.hp-1); toastP(CUR,'−1 vida','bad',0.8); if (PS.hp<=0) caught('vida'); }
