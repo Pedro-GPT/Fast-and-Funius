@@ -1025,14 +1025,13 @@ MODELS.push(
    lights:'quad', tail:'bar', bumpers:true, exhaust:[[-.7,.6]]}
 );
 // Coche secreto de POLICE: solo se consigue en la ruleta y no sale en ningún garaje hasta tenerlo
-MODELS.push({name:'La Rampa', secret:true, ramp:true, kind:'Coche secreto · solo polis', desc:'Morro de acero en cuña hasta el suelo: lo que le choque de frente sale volando por encima. Pero solo tiene 10 de vida y por los lados y por detrás es muy frágil.',
-   ZR:-2.35, ZF:2.45, wz:[0.85,-1.45], wr:0.32, wx:0.86, tireW:[1.05,1.45],
-   halfW:[[-2.35,.88],[-2.1,.97],[-1,1.0],[1,1.0],[2.1,.98],[2.45,.95]], bot:[[-2.35,.3],[-1.8,.2],[1.6,.16],[2.45,.12]],
-   sh:[[-2.35,.8],[-1.4,.86],[-.4,.86],[.25,.82],[1.2,.52],[2,.28],[2.45,.15]],
-   roof:[[-2.4,.6],[-1.6,.86],[-1.2,1.02],[-.8,1.2],[-.3,1.24],[.02,1.16],[.25,.94],[.5,.72],[2.5,.1]], gw:[[-1.5,.6],[-.8,.66],[0,.66],[.3,.7]],
-   bumpF:0, bumpR:.04, box:.9, hoodDip:0, glassZMin:-1.3, roofPaint:[-0.9,-0.05], doors:[0.15,-0.85],
-   dark:(z,ax,y,S)=> (z<-2.28&&y<0.62),
-   lights:null, tail:'bar', wing:'span', exhaust:[[-.55,.38]]});
+MODELS.push({name:'La Rampa', secret:true, ramp:true, kind:'Coche secreto · solo polis', desc:'Buggy blindado de seis ruedas con jaula, chapas remachadas, torreta y una pala de acero con dientes: lo que le choque de frente sale volando por encima. Solo tiene 10 de vida y por los lados y por detrás es muy frágil.',
+   ZR:-1.95, ZF:1.95, wz:[1.4,-0.75], wz3:-1.8, wr:0.42, wx:1.0, tireW:[1.35,1.45], noArches:true, rimColor:0x2e2c2a, spokeOff:[0],
+   halfW:[[-1.95,.5],[-1.6,.6],[-.5,.66],[.6,.64],[1.4,.5],[1.95,.36]], bot:[[-1.95,.42],[1.95,.38]],
+   sh:[[-1.95,.95],[-1.2,.98],[-.4,.95],[.4,.86],[1.2,.7],[1.95,.55]],
+   roof:[[-2,.6],[2,.4]], gw:[[-1.9,.4],[1.9,.4]],
+   bumpF:0, bumpR:0, box:.95, hoodDip:0, glassZMin:99, roofPaint:[0,0], doors:null,
+   lights:null, tail:'bar', wing:null, exhaust:[]});
 const K = 32;
 const BODIES = [];
 function getBody(m){
@@ -1488,6 +1487,23 @@ function resetPlayer(p){
   placeCar(p, q.i, laneOf(p)); snapCam(p);
 }
 
+let RUST_T=null, VENT_T=null;
+function rustTex(){   // chapa oxidada: manchas marrones y naranjas sobre acero gris
+  if (RUST_T) return RUST_T;
+  const cv=document.createElement('canvas'); cv.width=cv.height=256; const q=cv.getContext('2d');
+  q.fillStyle='#5e4a3c'; q.fillRect(0,0,256,256);
+  const cols=['#7a4b2a','#8f5a2e','#4a3a30','#6d6660','#a0652f','#3b2e26','#7d7670'];
+  for (let i=0;i<900;i++){ q.globalAlpha=0.08+Math.random()*0.25; q.fillStyle=cols[Math.random()*cols.length|0]; const r=2+Math.random()*(i<120?30:9); q.beginPath(); q.arc(Math.random()*256,Math.random()*256,r,0,Math.PI*2); q.fill(); }
+  q.globalAlpha=0.25; q.strokeStyle='#2a1f18'; for (let i=0;i<40;i++){ const x=Math.random()*256, y=Math.random()*256; q.lineWidth=1+Math.random()*2; q.beginPath(); q.moveTo(x,y); q.lineTo(x+rnd(-4,4),y+10+Math.random()*40); q.stroke(); }
+  q.globalAlpha=1; RUST_T=new THREE.CanvasTexture(cv); RUST_T.wrapS=RUST_T.wrapT=THREE.RepeatWrapping; RUST_T.anisotropy=ANISO; return RUST_T;
+}
+function ventTex(){   // rejilla de lamas rojizas
+  if (VENT_T) return VENT_T;
+  const cv=document.createElement('canvas'); cv.width=cv.height=128; const q=cv.getContext('2d');
+  q.fillStyle='#3a2620'; q.fillRect(0,0,128,128);
+  for (let x=4;x<128;x+=14){ q.fillStyle='#9a4a32'; q.fillRect(x,6,8,116); q.fillStyle='#c46a46'; q.fillRect(x,6,2,116); }
+  VENT_T=new THREE.CanvasTexture(cv); return VENT_T;
+}
 function buildCar(m, paintHex, parent){
   if (MODELS[m].scan) return buildScanCar(m, paintHex, parent);
   if (MODELS[m].bike) return buildBike(m, paintHex, parent);
@@ -1648,33 +1664,65 @@ function buildCar(m, paintHex, parent){
     const s=Math.sign(x), hub=new THREE.Vector3(x-s*0.14, spec.wr, z), bx=s*(z>0?0.16:0.32);
     for (const [dy,dz] of [[0.09,0.22],[0.09,-0.22],[-0.06,0.2],[-0.06,-0.2]]) rod(new THREE.Vector3(bx, spec.wr+dy, z+dz), hub, 0.014, carbon);
   }
-  if (spec.ramp){   // la rampa: chapa de acero estriado con franjas de aviso, de debajo del parabrisas hasta rozar el suelo
-    const cv=document.createElement('canvas'); cv.width=256; cv.height=512; const q=cv.getContext('2d');
-    q.fillStyle='#24272c'; q.fillRect(0,0,256,512); q.strokeStyle='#454a52'; q.lineWidth=3;
-    for (let y=8;y<512;y+=22) for (let x=8+(y%44?11:0);x<256;x+=22){ q.beginPath(); q.moveTo(x-5,y+(x%44?5:-5)); q.lineTo(x+5,y-(x%44?5:-5)); q.stroke(); }
-    q.strokeStyle='#f2b800'; q.lineWidth=20; q.lineJoin='miter';
-    for (const y of [150,240,330]){ q.beginPath(); q.moveTo(46,y+46); q.lineTo(128,y); q.lineTo(210,y+46); q.stroke(); }
-    const tex=new THREE.CanvasTexture(cv); tex.anisotropy=ANISO;
-    const plateM=new THREE.MeshStandardMaterial({map:tex, metalness:0.65, roughness:0.42});
-    const steel=new THREE.MeshStandardMaterial({color:0x5a5f67, metalness:0.95, roughness:0.32, side:THREE.DoubleSide});
-    const amber=new THREE.MeshStandardMaterial({color:0xffb020, emissive:0xff9000, emissiveIntensity:1.4});
-    const zB=0.25, yB=0.86, zT=2.72, yT=0.09, L=Math.hypot(zT-zB,yB-yT), ang=Math.atan2(yB-yT,zT-zB), yAt=z=>yB+(z-zB)*(yT-yB)/(zT-zB);
-    add(new THREE.BoxGeometry(2.02,0.05,L), plateM, 0,(yB+yT)/2,(zB+zT)/2, ang);
-    add(new THREE.BoxGeometry(2.08,0.035,0.14), chrome, 0,yT-0.01,zT);   // filo de acero que entra por debajo del otro coche
-    add(new THREE.BoxGeometry(2.02,0.09,0.1), steel, 0,yB+0.02,zB);
-    const tri=new THREE.Shape(); tri.moveTo(1.35,yAt(1.35)); tri.lineTo(1.35,0.13); tri.lineTo(zT,yT); tri.closePath();
-    const triG=new THREE.ShapeGeometry(tri);
+  if (spec.ramp){   // buggy blindado: pala con dientes, jaula, chapas remachadas (pintadas y oxidadas), motor a la vista, alerón y torreta
+    paint.roughness=0.72; paint.metalness=0.3; if (paint.clearcoat!==undefined) paint.clearcoat=0;   // pintura vieja, sin brillo
+    const plateP=paint.clone(); plateP.vertexColors=false;   // misma pintura (cambia con el color elegido) para piezas sueltas sin colores por vértice
+    const rustM=new THREE.MeshStandardMaterial({map:rustTex(), metalness:0.5, roughness:0.85});
+    body.material=[new THREE.MeshStandardMaterial({map:rustTex(), color:0x8a7a6c, metalness:0.5, roughness:0.85}), glass];   // el chasis es acero viejo; el color elegido va en las chapas
+    const tubeM=new THREE.MeshStandardMaterial({color:0x3d342c, metalness:0.6, roughness:0.62});
+    const gunM=new THREE.MeshStandardMaterial({color:0x1b1c1e, metalness:0.8, roughness:0.42});
+    const ventM=new THREE.MeshStandardMaterial({map:ventTex(), metalness:0.4, roughness:0.75});
+    const V=(x,y,z)=>new THREE.Vector3(x,y,z), T=(a,b,r=0.034,m=tubeM)=>rod(a,b,r,m);
+    const plate=(w,h,d,mat,x,y,z,rx=0,ry=0,rz=0)=>{ const o=add(new THREE.BoxGeometry(w,h,d),mat,x,y,z); o.rotation.order='YXZ'; o.rotation.set(rx,ry,rz); return o; };
+    // jaula antivuelco
     for (const s of [1,-1]){
-      rod(new THREE.Vector3(s*1.02,yB+0.03,zB), new THREE.Vector3(s*1.02,yT+0.03,zT), 0.03, steel);   // largueros
-      add(triG, steel, s*1.0,0,0, 0,-Math.PI/2);                                                    // cartelas delante de la rueda
-      add(new THREE.CylinderGeometry(0.075,0.075,0.03,16), headM, s*0.8,yAt(2.2)+0.04,2.2, ang);     // faros en la propia rampa
-      for (let k=0;k<(IS_MOBILE?0:5);k++){ const z=0.55+k*0.47; add(new THREE.CylinderGeometry(0.022,0.022,0.02,6), chrome, s*0.93,yAt(z)+0.03,z, ang); }   // remaches
-      rod(new THREE.Vector3(s*1.03,0.31,-0.2), new THREE.Vector3(s*1.03,0.31,-1.15), 0.05, chrome);   // escapes laterales
-      rod(new THREE.Vector3(s*0.48,1.27,-0.2), new THREE.Vector3(s*0.82,0.9,-1.9), 0.024, carbon);    // jaula antivuelco por fuera
-      rod(new THREE.Vector3(s*0.48,1.27,-0.2), new THREE.Vector3(s*0.48,1.27,-0.7), 0.024, carbon);
+      T(V(s*0.6,0.92,0.55), V(s*0.48,1.45,-0.05)); T(V(s*0.62,0.98,-0.95), V(s*0.52,1.52,-0.85));      // arcos delantero y principal
+      T(V(s*0.48,1.45,-0.05), V(s*0.52,1.52,-0.85)); T(V(s*0.52,1.52,-0.85), V(s*0.56,1.0,-1.85));     // largueros del techo y tirantes traseros
+      T(V(s*0.6,0.92,0.55), V(s*0.36,0.64,1.9)); T(V(s*0.66,0.88,0.55), V(s*0.66,0.94,-1.0));         // tubos del morro y del lateral
+      T(V(s*0.48,1.45,-0.05), V(-s*0.55,0.95,0.5), 0.026);                                           // aspa del parabrisas
+      T(V(s*0.36,0.55,1.85), V(s*0.62,0.4,2.36), 0.04); T(V(s*0.4,0.66,1.6), V(s*0.56,0.62,2.3), 0.04);   // brazos de la pala
     }
-    rod(new THREE.Vector3(-0.48,1.27,-0.2), new THREE.Vector3(0.48,1.27,-0.2), 0.024, carbon);
-    add(new THREE.BoxGeometry(0.86,0.05,0.09), amber, 0,1.31,-0.2);   // barra de luz en el techo
+    T(V(-0.48,1.45,-0.05), V(0.48,1.45,-0.05)); T(V(-0.52,1.52,-0.85), V(0.52,1.52,-0.85)); T(V(-0.36,0.64,1.9), V(0.36,0.64,1.9));
+    // chapas: parabrisas con mirilla, techo, capó, laterales
+    plate(0.98,0.03,0.82, plateP, 0,1.2,0.25, 0.72); add(new THREE.BoxGeometry(0.34,0.035,0.06), gunM, 0.02,1.36,0.06, 0.72);
+    plate(0.62,0.03,0.48, rustM, -0.2,1.31,0.38, 0.72,0.06,0.04);
+    plate(0.62,0.03,0.5, plateP, -0.18,1.55,-0.3, 0,0.08,0.04); plate(0.55,0.03,0.55, rustM, 0.22,1.56,-0.62, 0.02,-0.05,-0.03);
+    plate(1.0,0.03,0.7, plateP, 0,0.87,0.85, 0.2); plate(0.82,0.03,0.6, rustM, 0.04,0.74,1.5, 0.21,0.06);
+    plate(0.5,0.04,0.34, ventM, -0.12,0.9,1.12, 0.2,-0.04);
+    for (const s of [1,-1]){
+      plate(0.03,0.42,0.95, plateP, s*0.58,1.18,-0.45, 0,0,-s*0.12); plate(0.03,0.3,0.5, rustM, s*0.6,1.2,0.22, 0,s*0.2,-s*0.12);   // laterales de la cabina
+      plate(0.03,0.3,1.25, rustM, s*0.7,0.74,-0.35, 0,0,-s*0.05); plate(0.03,0.22,0.6, plateP, s*0.72,0.78,0.55, 0,0,-s*0.05,);
+      plate(0.03,0.26,0.7, plateP, s*0.6,1.18,-1.25, 0,-s*0.25,-s*0.1);                                                     // detrás del arco principal
+      add(new THREE.BoxGeometry(0.03,0.07,0.2), gunM, s*0.6,1.24,-0.4, 0,0,-s*0.12);                 // mirilla lateral
+    }
+    // pala: dos chapas en V, inclinada hacia atrás, con borde, nervios, remaches y dientes
+    for (const s of [1,-1]){
+      const bg=new THREE.Group(); bg.position.set(s*0.53,0.41,2.47); bg.rotation.order='YXZ'; bg.rotation.set(-0.32, s*0.18, 0); g.add(bg);
+      add(new THREE.BoxGeometry(1.12,0.62,0.045), rustM, 0,0,0, 0,0,0, bg);
+      add(new THREE.BoxGeometry(1.14,0.05,0.08), rustM, 0,0.31,0, 0,0,0, bg);
+      for (const x of [-0.3,0.2]) add(new THREE.BoxGeometry(0.045,0.6,0.06), tubeM, x,0,-0.05, 0,0,0, bg);
+      for (let k=0;k<6;k++) add(new THREE.ConeGeometry(0.045,0.13,4), rustM, -0.48+k*0.19,-0.3,0.04, Math.PI/2.3,0,0, bg);
+      if (!IS_MOBILE) for (let k=0;k<5;k++) add(new THREE.SphereGeometry(0.016,6,4), tubeM, -0.44+k*0.22,0.25,0.03, 0,0,0, bg);
+    }
+    plate(0.08,0.64,0.09, rustM, 0,0.41,2.58, -0.32);
+    // motor a la vista, colectores y escapes
+    add(new THREE.BoxGeometry(0.62,0.34,0.6), gunM, 0,1.13,-1.45); add(new THREE.BoxGeometry(0.5,0.12,0.42), tubeM, 0,1.35,-1.45);
+    for (const s of [1,-1]){ T(V(s*0.31,1.08,-1.25), V(s*0.48,0.82,-1.9), 0.035, chrome); T(V(s*0.48,0.82,-1.9), V(s*0.44,0.86,-2.2), 0.05, chrome);
+      for (let k=0;k<3;k++) add(new THREE.CylinderGeometry(0.03,0.03,0.1,8), chrome, s*0.24,1.33,-1.3-k*0.15, 0,0,s*0.6); }
+    // alerón trasero sobre soportes
+    for (const s of [1,-1]){ T(V(s*0.32,1.25,-1.65), V(s*0.42,1.78,-2.1), 0.03); plate(0.03,0.3,0.52, rustM, s*0.96,1.74,-2.15); }
+    plate(1.9,0.035,0.44, plateP, 0,1.82,-2.15, -0.12); plate(1.9,0.07,0.03, rustM, 0,1.84,-2.37);
+    // torreta con ametralladora
+    add(new THREE.CylinderGeometry(0.18,0.22,0.12,14), gunM, 0,1.62,-0.45);
+    add(new THREE.BoxGeometry(0.12,0.14,0.55), gunM, 0,1.76,-0.36);
+    add(new THREE.CylinderGeometry(0.024,0.024,0.85,10), gunM, 0,1.78,0.33, Math.PI/2);
+    add(new THREE.CylinderGeometry(0.04,0.04,0.13,10), gunM, 0,1.78,0.72, Math.PI/2);
+    plate(0.38,0.26,0.03, rustM, 0,1.76,-0.08); add(new THREE.BoxGeometry(0.16,0.14,0.2), new THREE.MeshStandardMaterial({color:0x4b4f2a, roughness:0.8}), 0.15,1.7,-0.45);
+    // suspensiones de las seis ruedas
+    for (const z of [spec.wz[0],spec.wz[1],spec.wz3]) for (const s of [1,-1]){
+      const hub=V(s*(spec.wx-0.14), spec.wr, z);
+      T(V(s*0.6,0.5,z+0.18), hub, 0.022); T(V(s*0.6,0.5,z-0.18), hub, 0.022); T(V(s*0.62,0.95,z), V(s*(spec.wx-0.16),spec.wr+0.12,z), 0.035, chrome);
+    }
   }
   // Sombra de contacto
   const ao=new THREE.Mesh(new THREE.PlaneGeometry(2.5,ZF-ZR+0.6), new THREE.MeshBasicMaterial({map:SHARED.aoTex, transparent:true, depthWrite:false}));
@@ -1688,7 +1736,7 @@ function buildCar(m, paintHex, parent){
   const discM = new THREE.MeshStandardMaterial({color:0x7a7d82, metalness:0.9, roughness:0.38});
   const calM = new THREE.MeshStandardMaterial({color:0xc4161c, metalness:0.3, roughness:0.35});
   const wheels = [];
-  for (const [x,z,front] of [[spec.wx,spec.wz[0],1],[-spec.wx,spec.wz[0],1],[spec.wx,spec.wz[1],0],[-spec.wx,spec.wz[1],0]]){
+  for (const [x,z,front] of [[spec.wx,spec.wz[0],1],[-spec.wx,spec.wz[0],1],[spec.wx,spec.wz[1],0],[-spec.wx,spec.wz[1],0], ...(spec.wz3!=null?[[spec.wx,spec.wz3,0],[-spec.wx,spec.wz3,0]]:[])]){   // wz3: tercer eje (buggy de seis ruedas)
     const pivot = new THREE.Group(); pivot.position.set(x,spec.wr,z);
     const mir = new THREE.Group(); mir.scale.set(Math.sign(x)*wsc*(front?tw[0]:tw[1]), wsc, wsc); pivot.add(mir);
     const spin = new THREE.Group(); mir.add(spin);
@@ -2640,7 +2688,7 @@ function policeExplode(e){
   for (const p of active) if (Math.hypot(p.car.x-c.x,p.car.z-c.z)<60) p.hit=Math.max(p.hit,0.6);
 }
 // La Rampa: el coche que le entra por delante sale volando por encima, da vueltas y al caer pierde un golpe
-const RAMP_G=11.8, RAMP_MIN=8, RAMP_FLIP=0.5;   // RAMP_FLIP: probabilidad de caer boca abajo y explotar   // gravedad del vuelo y velocidad mínima de choque (m/s, unos 30 km/h) para salir lanzado
+const RAMP_G=11.8, RAMP_MIN=8, RAMP_UPSIDE=0.4;   // RAMP_UPSIDE: probabilidad de que caiga boca abajo y explote   // gravedad del vuelo y velocidad mínima de choque (m/s, unos 30 km/h) para salir lanzado
 function copHurt(p, e){   // un golpe a la policía; si era el último, explota y me rellena la vida
   const maxH = e.kind==='van'?4 : e.kind==='suv'?3 : 2; e.hp--;
   if (e.hp<=0){ policeExplode(e); p.ps.hp=p.ps.maxHp;
@@ -2648,24 +2696,23 @@ function copHurt(p, e){   // un golpe a la policía; si era el último, explota 
   else toastP(p,'Golpe a la policía · '+(maxH-e.hp)+'/'+maxH,'good',1.2);
 }
 function rampLaunch(e, p, closing){
-  // cae de pie (pierde un golpe) o boca abajo (explota): el giro está calculado para acabar justo en una de las dos posturas
-  const c=e.car, m=p.car, vy=clamp(closing*0.47,6,11), flip=Math.random()<RAMP_FLIP;
-  const hR=flip ? Math.max(...MODELS[e.obj.model].roof.map(r=>r[1])) : 0;   // boca abajo toca el suelo con el techo
-  const T=(vy+Math.sqrt(Math.max(0,vy*vy-2*RAMP_G*(hR-0.25))))/RAMP_G, turns=Math.max(1,Math.round(T*0.7)), ang=2*Math.PI*turns-(flip?Math.PI:0);
-  const dx=c.x-m.x, dz=c.z-m.z, dl=Math.hypot(dx,dz)||1, back=Math.max(closing*0.35, 8);   // sale hacia atrás (en sentido contrario a mi marcha) y me pasa por encima
-  e.air={p, vy, flip, hR, rp:-ang/T, rr:(Math.random()<0.5?-1:1)*2*Math.PI*(Math.random()<0.5?0:1)/T, ry:rnd(-1,1)};
-  c.vx=-dx/dl*back; c.vz=-dz/dl*back; c.y=0.25; c.w=0; c.pitch=0; c.roll=0; c.vlong=c.vlat=c.slipR=c.slipF=0; e.inp.thr=0; e.inp.hb=false;
+  const c=e.car, m=p.car, vy=clamp(closing*0.47,6,11), T=2*vy/RAMP_G, turns=Math.max(1,Math.round(T*0.7));
+  const dx=c.x-m.x, dz=c.z-m.z, dl=Math.hypot(dx,dz)||1, back=Math.max(4, closing*0.1);   // sale hacia atrás (hacia mí y por encima), nunca hacia delante
+  const up=Math.random()<RAMP_UPSIDE;   // ¿cae boca abajo? media vuelta más y explota al caer
+  e.air={p, vy, up, rp:-(2*Math.PI*turns+(up?Math.PI:0))/T, rr:up?0:(Math.random()<0.5?-1:1)*2*Math.PI*(Math.random()<0.5?0:1)/T, ry:rnd(-1,1)};
+  const away=Math.max(0,(c.vx*dx+c.vz*dz)/dl*0.5);   // si se alejaba de mí, eso se anula: siempre sale hacia atrás
+  c.vx=c.vx*0.5-dx/dl*(back+away); c.vz=c.vz*0.5-dz/dl*(back+away); c.y=0.25; c.w=0; c.pitch=0; c.roll=0; c.vlong=c.vlat=c.slipR=c.slipF=0; e.inp.thr=0; e.inp.hb=false;
   for (let i=0;i<18*PQ;i++) spawn(FIRE,{x:c.x+rnd(-.8,.8),y:rnd(0.1,0.7),z:c.z+rnd(-.8,.8),vx:rnd(-6,6),vy:rnd(1,7),vz:rnd(-6,6),life:rnd(0.15,0.4),s0:0.4,s1:0.1,a:1,c0:0xfff0b0,c1:0xff7a20,drag:0.9});
   p.hit=Math.max(p.hit,0.35); SFX.impactAt(c.x,c.z,1); toastP(p,'¡A volar!','good',1);
 }
 function rampFly(e, h){
   const a=e.air, c=e.car; c.y+=a.vy*h; a.vy-=RAMP_G*h; c.x+=c.vx*h; c.z+=c.vz*h; c.pitch+=a.rp*h; c.roll+=a.rr*h; c.th+=a.ry*h;
   const y=c.y, pi=c.pitch; cityCollide(e); c.y=y; c.pitch=pi;   // los edificios lo paran, pero sigue en el aire
-  if (c.y>a.hR || a.vy>0) return;
-  e.air=null; c.y=a.hR; c.pitch=a.flip?Math.PI:0; c.roll=0; c.vx*=0.35; c.vz*=0.35; c.vlong=c.vlat=0; e.wp=null; SFX.impactAt(c.x,c.z,1);
+  if (c.y>0 || a.vy>0) return;
+  e.air=null; c.y=0; c.pitch=0; c.roll=0; c.vx*=0.35;
+  if (a.up){ const sp=MODELS[policeIdx(e.kind)]; c.pitch=Math.PI; c.y=Math.max(...sp.roof.map(q=>q[1]))+0.1; e.hp=1; }   // boca abajo: apoyado en el techo y el golpe lo destroza c.vz*=0.35; c.vlong=c.vlat=0; e.wp=null; SFX.impactAt(c.x,c.z,1);
   for (let i=0;i<14*PQ;i++) spawn(SMOKE,{x:c.x+rnd(-1.5,1.5),y:0.3,z:c.z+rnd(-1.5,1.5),vx:rnd(-4,4),vy:rnd(0.5,2.5),vz:rnd(-4,4),life:rnd(0.8,1.6),s0:1,s1:4,a:0.5,c0:0x8a8580,drag:0.95,fadeIn:true});
-  if (a.flip){ e.hp=1; copHurt(a.p, e); updateCarVisual(e,0); }   // boca abajo: explota y se queda volcado
-  else copHurt(a.p, e);
+  copHurt(a.p, e);
 }
 // Incógnito: si robo un coche de policía sin testigos, nadie sabe dónde estoy hasta que choque con un policía
 const WITNESS_D=150;
