@@ -3057,8 +3057,8 @@ function policeFrame(dt){
     const maxPol = Math.round((IS_MOBILE?WANT.maxM:WANT.max)[RUN.lvl-1]*(two?1.5:1));   // a dos jugadores, más policía
     const rampOn = active.some(p=>!p.ps.over && !p.ps.foot && MODELS[p.obj.model].ramp), mils = POL.filter(e=>e.kind==='mil' && !e.wrecked).length, tanks = POL.filter(e=>e.kind==='tank' && !e.wrecked).length;
     if (RUN.ns<=0){ RUN.ns=WANT.iv[RUN.lvl-1]*(two?0.75:1);
-      if (rampOn && RUN.lvl>=5 && tanks<Math.min(3,1+RUN.red)){ spawnPolice('tank'); SFX.warn(); for (const p of alive()) toastP(p,'¡TANQUE! Cada cañonazo quita 5 de vida','bad',2.4); }
-      else if (rampOn && RUN.lvl>=MIL_LVL && mils<RUN.lvl-MIL_LVL+1){ spawnPolice('mil'); SFX.warn(); for (const p of alive()) toastP(p,'¡Blindado militar con torreta!','bad',2); }
+      if (rampOn && RUN.lvl>=TANK_LVL && tanks<Math.min(3,RUN.lvl-TANK_LVL+1+RUN.red)){ spawnPolice('tank'); SFX.warn(); for (const p of alive()) toastP(p,'¡TANQUE! Cada cañonazo quita 5 de vida','bad',2.4); }
+      else if (rampOn && RUN.lvl>=MIL_LVL && mils<Math.min(3,RUN.lvl-MIL_LVL+1)){ spawnPolice('mil'); SFX.warn(); for (const p of alive()) toastP(p,'¡Blindado militar con torreta!','bad',2); }
       else if (POL.filter(e=>!e.wrecked).length<maxPol){ let kind='patrol';
         if (RUN.t>=300){ const r=Math.random(), vans=POL.filter(e=>e.kind==='van').length; kind = r<0.35 ? 'suv' : (r<0.55 && vans<3) ? 'van' : 'patrol'; }
         spawnPolice(kind); for (const p of alive()) toastP(p, kind==='suv'?'¡Todoterreno policial!':kind==='van'?'¡Furgón blindado!':'Refuerzos en camino', kind==='patrol'?'':'bad', 1.6); } }
@@ -3676,7 +3676,7 @@ function copShoot(k, tgt, d){
   if (PS.foot){ PED.hp=Math.max(0,PED.hp-1); toastP(CUR,'−1 vida','bad',0.8); if (PED.hp<=0) pedDie('disparos', sn*3, cs*3); }
   else { PS.hp=Math.max(0,PS.hp-1); toastP(CUR,'−1 vida','bad',0.8); if (PS.hp<=0) caught('vida'); }
 }
-const MIL_LVL=3, MIL_RANGE=140, MIL_MAX=8;   // MIL_MAX: blindados a la vez como mucho
+const MIL_LVL=1, TANK_LVL=3, MIL_RANGE=140, MIL_MAX=8;   // estrella desde la que salen blindados y tanques (1 más por estrella, hasta 3); MIL_MAX: blindados a la vez como mucho
 const GUN = {mil:{dmg:1, cd:[1.3,2.1], rot:2.5, len:1.9}, tank:{dmg:5, cd:[4,5.5], rot:1.1, len:4.4}};   // daño por impacto, segundos entre disparos, giro (rad/s), largo del cañón   // estrella desde la que salen y alcance de la torreta (m)
 function turretUpdate(dt){
   for (const e of POL){ const o=e.obj; if (!GUN[e.kind] || !o.tur || e.wrecked || e.air || e.empty || e.out) continue;
