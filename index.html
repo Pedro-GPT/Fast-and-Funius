@@ -4094,7 +4094,7 @@ function showMenu(state){
   }
 }
 // Barra CODE del menú polis: los códigos se ganan dígito a dígito con las estrellas (ver revealStars). Cada uno vale 2.000 de oro y solo una vez.
-const CODE_GOLD = 2000;
+const CODE_GOLD = 2000, RAMP_CODE = '427985';   // RAMP_CODE: código fijo que desbloquea La Rampa
 function codeBar(parent){
   const box=document.createElement('div'); box.className='codeBox';
   const btn=document.createElement('button'); btn.type='button'; btn.textContent='Code';
@@ -4107,6 +4107,10 @@ function codeBar(parent){
       if (e.key==='Escape'){ inp.replaceWith(btn); msg.textContent=''; return; }
       if (e.key!=='Enter') return;
       const v=inp.value.trim(), i=PSAVE.earned.indexOf(v);
+      if (v===RAMP_CODE){ const r=MODELS.findIndex(m=>m.secret);   // código secreto: desbloquea La Rampa
+        if (isUnlocked(r)){ msg.textContent='Ya tienes '+MODELS[r].name; msg.className='codeMsg ok'; }
+        else { PSAVE.unlocked.push(r); psave(); msg.textContent='¡Código secreto! '+MODELS[r].name+' desbloqueada · Está en el garaje polis'; msg.className='codeMsg ok'; SFX.pickup(); }
+        inp.replaceWith(btn); return; }
       if (i<0){ msg.textContent='Código incorrecto'; msg.className='codeMsg bad'; inp.select(); return; }
       PSAVE.earned.splice(i,1); PSAVE.gold+=CODE_GOLD; psave();
       msg.textContent='¡Código correcto! +'+CODE_GOLD.toLocaleString('es-ES')+' oro · Total: '+PSAVE.gold.toLocaleString('es-ES'); msg.className='codeMsg ok'; SFX.pickup();
