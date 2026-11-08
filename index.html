@@ -3541,6 +3541,7 @@ function footHud(){   // mira, balas y avisos del jugador 1 (el del ratón)
   if (rg && !paused && fresh) hint = RG.on ? 'Clic: disparar · Esc: dejar de apuntar' : 'Haz clic para apuntar con la torreta';
   const h=$('footHint'); if (h.textContent!==hint){ h.textContent=hint; h.hidden=!hint; }
 }
+const RAMP_BULLET = 2;   // vida que quita cada bala de la torreta de La Rampa (la pistola a pie quita 1)
 const RG = {yaw:0, pitch:0.05, on:false, fire:false, cd:0, hint0:0, ht:0};   // torreta de La Rampa: ángulo respecto al coche, disparo pedido, recarga
 const j1ramp = () => { const p=players[0], s=p.ps; return policeMode && !IS_MOBILE && !s.foot && !s.over && !s.garIn && !p.wrecked && !!MODELS[p.obj.model].ramp; };
 function rampGun(dt){   // gira la torreta y dispara; la bala va justo a la mira y quita un golpe
@@ -3562,7 +3563,7 @@ function rampShoot(p){
   for (let i=0;i<3;i++) spawn(FIRE,{x:_v1.x,y:_v1.y,z:_v1.z,vx:d.x*4,vy:d.y*4,vz:d.z*4,life:0.07,s0:0.5,s1:0.15,a:1,c0:0xfff0b0,c1:0xff9a30});
   if (what!=='air') spawn(SMOKE,{x,y:Math.max(0.05,y),z,vx:-d.x*0.6,vy:0.5,vz:-d.z*0.6,life:0.5,s0:0.2,s1:0.8,a:0.5,c0:0x8a8580,c1:0xb5b0a8});
   SFX.shot(c.x,c.z); RG.cd=0.3; p.hit=Math.max(p.hit,0.08);
-  if (hit){ SFX.impactAt(x,z,0.5); for (let i=0;i<5;i++) spawn(FIRE,{x,y,z,vx:rnd(-3,3),vy:rnd(1,4),vz:rnd(-3,3),life:0.15,s0:0.4,s1:0.1,a:1,c0:0xfff0b0,c1:0xff7a20}); bindP(p); copHurt(p, hit, 1); }
+  if (hit){ SFX.impactAt(x,z,0.5); for (let i=0;i<5;i++) spawn(FIRE,{x,y,z,vx:rnd(-3,3),vy:rnd(1,4),vz:rnd(-3,3),life:0.15,s0:0.4,s1:0.1,a:1,c0:0xfff0b0,c1:0xff7a20}); bindP(p); copHurt(p, hit, RAMP_BULLET); }
   if (cop){ copDie(cop, d.x*5, d.z*5); toastP(p,'¡Policía abatido!','good',1); }
 }
 function gunCam(p, dt){   // cámara detrás de la torreta, mirando adonde apuntas
