@@ -2465,9 +2465,12 @@ function PSTATS(i){   // datos medidos con la propia física: 0–170 km/h y vel
   while (t<40 && Math.hypot(s.vx,s.vz)<170/3.6){ simStep(s, inp, false, 1/120); t+=1/120; }
   return PSTATS_C[i] = {hp:T.hp, t170:t>=40?'—':t.toFixed(1).replace('.',','), top:Math.round(top*3.6)};
 }
-const PSAVE = (()=>{ const d={gold:0, unlocked:[2], best:0, sel:{model:2, color:'#1d5fd1'}, sel2:{model:2, color:'#f2b800'}, earned:[], vale:0};
+const PSAVE = (()=>{ const d={gold:0, unlocked:[2], best:0, sel:{model:2, color:'#1d5fd1'}, sel2:{model:2, color:'#f2b800'}, earned:[], vale:0, skins:['classic']};
   try{ const r=JSON.parse(localStorage.getItem('faf_police')||'null'); if (r && typeof r==='object') Object.assign(d, r); }catch(_){}
-  if (!d.unlocked.includes(2)) d.unlocked.push(2); return d; })();
+  if (!d.unlocked.includes(2)) d.unlocked.push(2);
+  if (!Array.isArray(d.skins)) d.skins=['classic']; if (!d.skins.includes('classic')) d.skins.push('classic');
+  if (d.skin && !d.skins.includes(d.skin)) d.skins.push(d.skin);   // quien ya lo había elegido cuando eran gratis, se lo queda
+  return d; })();
 function psave(){ try{ localStorage.setItem('faf_police', JSON.stringify(PSAVE)); }catch(_){} }
 const isUnlocked = i => PSAVE.unlocked.includes(i);
 let policeMode=false, cityGroup=null;
@@ -3273,7 +3276,8 @@ const SKINS = [
   {id:'robot', name:'Robot', desc:'Chapa, visor azul y antena. También en la moto.'},
   {id:'astro', name:'Astronauta', desc:'Traje blanco, mochila y visor dorado. También en la moto.'},
   {id:'ninja', name:'Ninja', desc:'Todo de negro con cinta roja. También en la moto.'}];
-const skinOf = p => p.id===0 ? (SKINS.some(k=>k.id===PSAVE.skin) ? PSAVE.skin : 'classic') : 'classic';   // el J2 de la pantalla dividida usa el clásico
+const skinOf = p => p.id===0 ? (SKINS.some(k=>k.id===PSAVE.skin) && PSAVE.skins.includes(PSAVE.skin) ? PSAVE.skin : 'classic') : 'classic';
+const hasSkin = id => PSAVE.skins.includes(id);   // los personajes (menos el clásico) salen en la ruleta   // el J2 de la pantalla dividida usa el clásico
 // Aspecto de cada personaje: colores (piel/guantes, ropa, piernas, zapatos) y cabeza
 const SKIN_LOOK = {
   alien:{skin:0x7cc94a, cloth:0xa9b4c0, clothO:{metalness:0.55}, shoe:0x5d6670,
@@ -4003,10 +4007,10 @@ function showGarageCar(){
 function carShown(i){ const m=MODELS[i]; return !m.hidden && (!m.secret || (gReturn==='police' && isUnlocked(i))); }   // el coche secreto no existe en el garaje hasta ganarlo en la ruleta
 function refreshGarage(){
   $('garageUI').classList.toggle('skins', gSkinMode);
-  if (gSkinMode){ const S=SKINS[gSkin], mine=PSAVE.skin===S.id || (!PSAVE.skin && S.id==='classic');
-    $('gCount').textContent=(gSkin+1)+' / '+SKINS.length; $('gKind').textContent='Personaje'; $('gName').textContent=S.name; $('gDesc').textContent=S.desc;
-    $('gWho').textContent='Tu personaje'+(mine?' · elegido':''); $('gSame').hidden=true; $('gPol').hidden=true; $('gSpin').hidden=true; $('garageUI').classList.remove('rescue');
-    const pick=$('gPick'); pick.disabled=false; pick.textContent = mine ? 'Este es el tuyo · Volver' : 'Elegir este personaje';
+  if (gSkinMode){ const S=SKINS[gSkin], mine=skinOf(players[0])===S.id, own=hasSkin(S.id);
+    $('gCount').textContent=(gSkin+1)+' / '+SKINS.length; $('gKind').textContent='Personaje'; $('gName').textContent=S.name; $('gDesc').textContent=S.desc+(own?'':' Bloqueado: sale en la ruleta del garaje polis.');
+    $('gWho').textContent='Tu personaje'+(mine?' · elegido':own?'':' · bloqueado'); $('gSame').hidden=true; $('gPol').hidden=true; $('gSpin').hidden=true; $('garageUI').classList.remove('rescue');
+    const pick=$('gPick'); pick.disabled=!own; pick.textContent = mine ? 'Este es el tuyo · Volver' : own ? 'Elegir este personaje' : 'Bloqueado · sale en la ruleta';
     document.querySelector('.gHint').textContent='Arrastra para girarlo · flechas para cambiar de personaje';
     showGarageCar(); garageCamFit(); return; }
   const s=MODELS[gModel];
@@ -4036,7 +4040,7 @@ function refreshGarage(){
 }
 // Ruleta del garaje polis: 1000 de oro por tirada
 const WHEEL_COST = 1000, WHEEL_SEG = [
-  {t:'50 oro', gold:50, w:26, c:'#2a2f38'}, {t:'Coche', car:true, w:10, c:'#c8161d'}, {t:'100 oro', gold:100, w:22, c:'#3a4150'}, {t:'Nada', w:10, c:'#14171d'},
+  {t:'50 oro', gold:50, w:26, c:'#2a2f38'}, {t:'Coche', car:true, w:10, c:'#c8161d'}, {t:'100 oro', gold:100, w:22, c:'#3a4150'}, {t:'Nada', w:10, c:'#14171d'}, {t:'Personaje', skin:true, w:10, c:'#2f6bff'},
   {t:'250 oro', gold:250, w:14, c:'#2a2f38'}, {t:'Tienda gratis', shop:true, w:8, c:'#1f7a3a'}, {t:'Coche secreto', secret:true, w:3, c:'#6a1fc0'}, {t:'500 oro', gold:500, w:8, c:'#3a4150'}, {t:'3000 oro', gold:3000, w:2, c:'#d8a200'}];
 const WH = {open:false, spin:false, free:false, rot:0};
 function wheelDraw(){
@@ -4068,6 +4072,10 @@ function wheelPrize(q){
   if (q.gold){ PSAVE.gold+=q.gold; m='+'+q.gold+' oro'; SFX.pickup(); }
   else if (q.shop){ if (PRICES.some((_,i)=>!isUnlocked(i))){ PSAVE.vale=(PSAVE.vale|0)+1; m='¡Tienda gratis! Cierra la ruleta y elige el coche que quieras'; }   // un vale: un coche de la tienda (el secreto no está en la tienda)
     else { PSAVE.gold+=WHEEL_COST; m='Ya los tienes todos: te devolvemos '+WHEEL_COST+' oro'; }
+    SFX.pickup(); }
+  else if (q.skin){ const lk=SKINS.filter(k=>!hasSkin(k.id));
+    if (lk.length){ const k=lk[Math.random()*lk.length|0]; PSAVE.skins.push(k.id); m='¡Personaje '+k.name+' desbloqueado! Elígelo en Personaje (menú polis)'; }
+    else { PSAVE.gold+=WHEEL_COST; m='Ya tienes todos los personajes: te devolvemos '+WHEEL_COST+' oro'; }
     SFX.pickup(); }
   else if (q.car){ const lk=PRICES.map((_,i)=>i).filter(i=>!isUnlocked(i));
     if (lk.length){ const i=lk[Math.random()*lk.length|0]; PSAVE.unlocked.push(i); gModel=i; if (MODELS[i].scan) gColor='#c8161d'; m='¡'+MODELS[i].name+' desbloqueado!'; }
@@ -4545,13 +4553,13 @@ function showMenu(state){
     add('Jugar online',()=>{ NET.msg=''; showMenu('online'); },false,'Hasta 4 jugadores, cada uno en su ordenador');
     polMenu='police';
     add('Garaje POLICE',()=>openGarage(1,'police'));
-    add('Personaje',()=>openSkins('police'),false,'Ahora: '+(SKINS.find(k=>k.id===PSAVE.skin)||SKINS[0]).name);
+    add('Personaje',()=>openSkins('police'),false,'Ahora: '+(SKINS.find(k=>k.id===skinOf(players[0]))||SKINS[0]).name);
     add('Volver',()=>showMenu('mode'));
     codeBar(b);
   } else if (state==='online'){
     polMenu='online'; netClose();
     $('menuTitle').textContent='Jugar online';
-    $('menuSub').innerHTML=(NET.msg?'<b style="color:#ff8a1f">'+NET.msg+'</b><br>':'')+'Hasta 4 jugadores, cada uno en su ordenador. Uno genera el código y los demás se unen con él.<br>Cada uno juega con su coche y su personaje y se queda el oro que coge. Si pillan a un compañero, pulsa su número para revivirlo por 50 oro.<br>Coche: <b>'+MODELS[PSAVE.sel.model].name+'</b> · Personaje: <b>'+(SKINS.find(k=>k.id===PSAVE.skin)||SKINS[0]).name+'</b> · Oro: <b>'+PSAVE.gold+'</b>';
+    $('menuSub').innerHTML=(NET.msg?'<b style="color:#ff8a1f">'+NET.msg+'</b><br>':'')+'Hasta 4 jugadores, cada uno en su ordenador. Uno genera el código y los demás se unen con él.<br>Cada uno juega con su coche y su personaje y se queda el oro que coge. Si pillan a un compañero, pulsa su número para revivirlo por 50 oro.<br>Coche: <b>'+MODELS[PSAVE.sel.model].name+'</b> · Personaje: <b>'+(SKINS.find(k=>k.id===skinOf(players[0]))||SKINS[0]).name+'</b> · Oro: <b>'+PSAVE.gold+'</b>';
     { const box=document.createElement('div'); box.className='codeBox'; const inp=document.createElement('input'); inp.type='text'; inp.maxLength=14; inp.placeholder='Tu nombre'; inp.value=PSAVE.name||''; inp.setAttribute('aria-label','Tu nombre (sale encima de tu coche)');
       inp.addEventListener('input', ()=>{ PSAVE.name=inp.value.slice(0,14); psave(); }); inp.addEventListener('keydown', e=>{ e.stopPropagation(); if (e.key==='Enter') inp.blur(); }); inp.addEventListener('keyup', e=>e.stopPropagation());
       const lb=document.createElement('div'); lb.className='codeMsg'; lb.textContent='Tu nombre: sale encima de tu coche'; box.append(lb, inp); b.appendChild(box); }
@@ -4662,7 +4670,7 @@ function garageRescue(){   // pagar para que vuelva el compañero al que han pil
   PSAVE.gold-=RESCUE_PRICE; psave(); rescue(mate); refreshGarage();
 }
 function garagePick(){
-  if (gSkinMode){ PSAVE.skin=SKINS[gSkin].id; psave(); gSkinMode=false; for (const p of players) applySelection(p); showMenu(gSkinRet); return; }
+  if (gSkinMode){ if (!hasSkin(SKINS[gSkin].id)) return; PSAVE.skin=SKINS[gSkin].id; psave(); gSkinMode=false; for (const p of players) applySelection(p); showMenu(gSkinRet); return; }
   if (gReturn==='police'){
     if (!isUnlocked(gModel)){
       const pr=PRICES[gModel];
