@@ -2441,7 +2441,7 @@ function PSTATS(i){   // datos medidos con la propia física: 0–170 km/h y vel
   while (t<40 && Math.hypot(s.vx,s.vz)<170/3.6){ simStep(s, inp, false, 1/120); t+=1/120; }
   return PSTATS_C[i] = {hp:T.hp, t170:t>=40?'—':t.toFixed(1).replace('.',','), top:Math.round(top*3.6)};
 }
-const PSAVE = (()=>{ const d={gold:0, unlocked:[2], best:0, sel:{model:2, color:'#1d5fd1'}, sel2:{model:2, color:'#f2b800'}, earned:[]};
+const PSAVE = (()=>{ const d={gold:0, unlocked:[2], best:0, sel:{model:2, color:'#1d5fd1'}, sel2:{model:2, color:'#f2b800'}, earned:[], vale:0};
   try{ const r=JSON.parse(localStorage.getItem('faf_police')||'null'); if (r && typeof r==='object') Object.assign(d, r); }catch(_){}
   if (!d.unlocked.includes(2)) d.unlocked.push(2); return d; })();
 function psave(){ try{ localStorage.setItem('faf_police', JSON.stringify(PSAVE)); }catch(_){} }
@@ -3724,8 +3724,10 @@ function refreshGarage(){
     const st=PSTATS(gModel), un=isUnlocked(gModel), pr=PRICES[gModel];
     $('gWho').textContent='POLICE'+(GSPLIT||pendingMode===2 ? ' · Jugador '+(gPlayer+1) : '')+' · Oro: '+PSAVE.gold;
     const lock='<svg width="18" height="20" viewBox="0 0 18 20" aria-hidden="true"><rect x="2" y="8.5" width="14" height="10.5" rx="2" fill="currentColor"/><path d="M5 8.5V6a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>';
-    box.innerHTML = '<div class="price'+(un?' free':'')+'">'+(un?'Desbloqueado':lock+pr+' oro')+'</div><p class="stats">Vida '+st.hp+' · 0–170 km/h en '+st.t170+' s · Punta '+st.top+' km/h</p>';
-    if (!un){ if (PSAVE.gold>=pr) pick.textContent='Desbloquear · '+pr+' oro'; else { pick.textContent='Bloqueado · te faltan '+(pr-PSAVE.gold)+' oro'; pick.disabled=true; } }
+    const vale=PSAVE.vale>0 && !un && PRICES[gModel]!=null;
+    box.innerHTML = '<div class="price'+(un||vale?' free':'')+'">'+(un?'Desbloqueado':vale?'Gratis con tu premio de la ruleta':lock+pr+' oro')+'</div><p class="stats">Vida '+st.hp+' · 0–170 km/h en '+st.t170+' s · Punta '+st.top+' km/h</p>';
+    if (vale) pick.textContent='Llevármelo gratis';
+    else if (!un){ if (PSAVE.gold>=pr) pick.textContent='Desbloquear · '+pr+' oro'; else { pick.textContent='Bloqueado · te faltan '+(pr-PSAVE.gold)+' oro'; pick.disabled=true; } }
   }
   const sb=$('gSpin'); sb.hidden=!pol; if (pol){ sb.textContent='Ruleta · '+WHEEL_COST+' oro'; sb.disabled=PSAVE.gold<WHEEL_COST && !WH.free; }
   const mate = GSPLIT && players[1-GSPLIT.id], resc = !!(mate && mate.ps.over), rb=$('gRescue');
@@ -3737,7 +3739,7 @@ function refreshGarage(){
 // Ruleta del garaje polis: 1000 de oro por tirada
 const WHEEL_COST = 1000, WHEEL_SEG = [
   {t:'50 oro', gold:50, w:26, c:'#2a2f38'}, {t:'Coche', car:true, w:10, c:'#c8161d'}, {t:'100 oro', gold:100, w:22, c:'#3a4150'}, {t:'Nada', w:10, c:'#14171d'},
-  {t:'250 oro', gold:250, w:14, c:'#2a2f38'}, {t:'Gratis', free:true, w:8, c:'#1f7a3a'}, {t:'Coche secreto', secret:true, w:3, c:'#6a1fc0'}, {t:'500 oro', gold:500, w:8, c:'#3a4150'}, {t:'3000 oro', gold:3000, w:2, c:'#d8a200'}];
+  {t:'250 oro', gold:250, w:14, c:'#2a2f38'}, {t:'Tienda gratis', shop:true, w:8, c:'#1f7a3a'}, {t:'Coche secreto', secret:true, w:3, c:'#6a1fc0'}, {t:'500 oro', gold:500, w:8, c:'#3a4150'}, {t:'3000 oro', gold:3000, w:2, c:'#d8a200'}];
 const WH = {open:false, spin:false, free:false, rot:0};
 function wheelDraw(){
   const cv=$('wheelC'), g=cv.getContext('2d'), R=cv.width/2, n=WHEEL_SEG.length, a=Math.PI*2/n;
@@ -3766,7 +3768,9 @@ function wheelSpin(){
 function wheelPrize(q){
   let m;
   if (q.gold){ PSAVE.gold+=q.gold; m='+'+q.gold+' oro'; SFX.pickup(); }
-  else if (q.free){ WH.free=true; m='¡Tirada gratis!'; SFX.pickup(); }
+  else if (q.shop){ if (PRICES.some((_,i)=>!isUnlocked(i))){ PSAVE.vale=(PSAVE.vale|0)+1; m='¡Tienda gratis! Cierra la ruleta y elige el coche que quieras'; }   // un vale: un coche de la tienda (el secreto no está en la tienda)
+    else { PSAVE.gold+=WHEEL_COST; m='Ya los tienes todos: te devolvemos '+WHEEL_COST+' oro'; }
+    SFX.pickup(); }
   else if (q.car){ const lk=PRICES.map((_,i)=>i).filter(i=>!isUnlocked(i));
     if (lk.length){ const i=lk[Math.random()*lk.length|0]; PSAVE.unlocked.push(i); gModel=i; if (MODELS[i].scan) gColor='#c8161d'; m='¡'+MODELS[i].name+' desbloqueado!'; }
     else { PSAVE.gold+=WHEEL_COST; m='Ya los tienes todos: te devolvemos '+WHEEL_COST+' oro'; }
@@ -4019,8 +4023,8 @@ function garageRescue(){   // pagar para que vuelva el compañero al que han pil
 function garagePick(){
   if (gReturn==='police'){
     if (!isUnlocked(gModel)){
-      const pr=PRICES[gModel]; if (PSAVE.gold<pr) return;
-      PSAVE.gold-=pr; PSAVE.unlocked.push(gModel); psave(); refreshGarage(); return;
+      const pr=PRICES[gModel];
+      if (PSAVE.vale>0 && pr!=null) PSAVE.vale--; else { if (PSAVE.gold<pr) return; PSAVE.gold-=pr; } PSAVE.unlocked.push(gModel); psave(); refreshGarage(); return;
     }
     const sel={model:gModel, color:gColor};
     if (GSPLIT){ const p=GSPLIT; if (p.id===0) PSAVE.sel=sel; else PSAVE.sel2=sel; psave(); closeSplitGarage(); bindP(p); garageSwap(); bindP(players[0]); return; }
