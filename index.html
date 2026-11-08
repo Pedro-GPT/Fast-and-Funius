@@ -2207,7 +2207,7 @@ function collideCars(A, B, pre){   // pre(nx,nz,vrel): si devuelve true, el choq
 
 // ---------- Entrada ----------
 const keys = {}; const touch = {gas:0,brake:0,hb:0,steer:0,nitro:0};
-const GAME_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD','KeyR','KeyE','KeyM','KeyP','KeyF','ShiftLeft','ShiftRight'];
+const GAME_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD','KeyR','KeyE','KeyM','KeyP','KeyF','ShiftLeft','ShiftRight','KeyG','Comma'];
 addEventListener('keydown', e=>{
   if (GAME_KEYS.includes(e.code) && menuState!=='title' && menuState!=='mode' && menuState!=='race') e.preventDefault();
   if (e.code==='Enter' && policeMode && !paused) e.preventDefault();   // Enter es la tecla de bajar/subir del J2: que no pulse botones
@@ -2940,7 +2940,7 @@ function startPolice(n){
     bindP(p); repair(p); p.wrecked=false; p.obj.g.visible=true;
     Object.assign(PS, {block:0, over:false, flash:0, nitro:1, nitroOn:false, foot:false, reason:'', garArmed:false, garRun:false, garWarnT:0, garIn:false});
     policeCarSetup(p);
-    p.nitroK=0; p.nitroKey=false; p.inp.nitro=false; p.hit=0; p.dmg=0; p.bTouch=0;
+    p.nitroK=0; p.nitroKey=false; p.inp.nitro=false; p.hit=0; p.dmg=0; p.bTouch=0; p.fly=null;
     p.hud.v.classList.remove('out');
     placeCity(p, 0, 0, Math.PI/2); garageExit(p);
   }
@@ -2951,6 +2951,7 @@ function startPolice(n){
   if (!NET.client){ for (let k=0;k<3*n;k++) spawnPolice('patrol');   // la persecución empieza con 3 patrullas por jugador
     for (let k=0;k<3;k++) spawnBag(); }
   for (const p of active){ updateCarVisual(p,0); snapCam(p); updateCamera(p,0.016); }
+  for (const p of active) if (gunKindOf(p) && !IS_MOBILE) toastP(p, p.id===1 ? 'Torreta: mantén la coma y dispara sola al coche más cercano' : n===1 ? 'Torreta: clic para apuntar con el ratón · o mantén G y dispara sola' : 'Torreta: mantén G y dispara sola al coche más cercano', 'good', 4);
   $('pWarn').hidden=true; clearCaughtFx();
   resume();
 }
@@ -3013,6 +3014,32 @@ function raceNitro(p, dt){   // nitro en carrera: igual que en POLICE (3 s de ca
   p.inp.nitro=R.on; p.nitroK=(p.nitroK||0)+((R.on?1:0)-(p.nitroK||0))*Math.min(1, dt*(R.on?6:2.5));
   if (R.on) nitroFlames(p, dt);
 }
+// Si La Rampa de un compañero me entra de frente salgo volando recto (sin vueltas). En el aire no se gira:
+// adelante = mortal hacia delante, atrás = mortal hacia atrás, nitro = planear más tiempo. Si caigo boca abajo, me pillan.
+const rampSide = p => !!MODELS[p.obj.model].ramp && !p.ps.foot && !p.ps.over && !p.fly;
+const canFly = p => !p.ps.foot && !p.ps.over && !p.ps.garIn && !p.fly && !p.wrecked;
+function playerLaunch(p, R, closing){
+  const c=p.car, m=R.car, vy=clamp(closing*0.47,6,11), dx=c.x-m.x, dz=c.z-m.z, dl=Math.hypot(dx,dz)||1, back=Math.max(4, closing*0.1);
+  const away=Math.max(0,(c.vx*dx+c.vz*dz)/dl*0.5);
+  c.vx=c.vx*0.5-dx/dl*(back+away); c.vz=c.vz*0.5-dz/dl*(back+away); c.y=0.25; c.w=0; c.pitch=0; c.roll=0; c.whT=0; c.lean=0; c.tip=0; c.steer=0; c.vlong=c.vlat=c.slipR=c.slipF=0;
+  p.fly={vy}; p.hit=Math.max(p.hit,0.4); if (R.hit!=null) R.hit=Math.max(R.hit,0.3); SFX.impactAt(c.x,c.z,1);
+  for (let i=0;i<14*PQ;i++) spawn(FIRE,{x:c.x+rnd(-.8,.8),y:rnd(0.1,0.7),z:c.z+rnd(-.8,.8),vx:rnd(-6,6),vy:rnd(1,7),vz:rnd(-6,6),life:rnd(0.15,0.4),s0:0.4,s1:0.1,a:1,c0:0xfff0b0,c1:0xff7a20,drag:0.9});
+  toastP(p,'¡A volar! Adelante / atrás: mortales · nitro: planear','good',2.2);
+}
+function playerFly(p, h){
+  const a=p.fly, c=p.car; if (a.dead) return;   // caído boca abajo: se queda así
+  c.y+=a.vy*h; a.vy-=RAMP_G*(p.ps.nitroOn?0.3:1)*h; c.x+=c.vx*h; c.z+=c.vz*h;
+  const dir=(p.inp.thr>0.5?1:0)-(p.inp.brk>0.5?1:0); c.pitch=(c.pitch||0)+dir*6.5*h;   // mortales: delante / atrás
+  const y=c.y, pi=c.pitch; cityCollide(p); c.y=y; c.pitch=pi;
+  if (c.y>0 || a.vy>0) return;
+  const q=Math.atan2(Math.sin(pi),Math.cos(pi));
+  SFX.impactAt(c.x,c.z,1);
+  for (let i=0;i<12*PQ;i++) spawn(SMOKE,{x:c.x+rnd(-1.5,1.5),y:0.3,z:c.z+rnd(-1.5,1.5),vx:rnd(-4,4),vy:rnd(0.5,2.5),vz:rnd(-4,4),life:rnd(0.8,1.6),s0:1,s1:4,a:0.5,c0:0x8a8580,drag:0.95,fadeIn:true});
+  if (Math.abs(q)>Math.PI/2){   // boca abajo: apoyado en el techo y pillado
+    const sp=MODELS[p.obj.model]; c.pitch=Math.PI; c.y=p.obj.bike?1.25:Math.max(...((sp.roof&&sp.roof.length)?sp.roof:[[0,1.3]]).map(r=>r[1]))+0.05;
+    c.vx=c.vz=0; c.w=0; a.dead=true; const pc=CUR; bindP(p); PS.hp=0; caught('volteo'); bindP(pc); return; }
+  p.fly=null; c.y=0; c.pitch=0; c.vx*=0.8; c.vz*=0.8; toastP(p, Math.abs(pi)>5 ? '¡Mortal clavado!' : '¡Aterrizaje!','good',1.2);
+}
 function policeFrame(dt){
   const two = RUN.n===2;
   // --- mandos de cada jugador ---
@@ -3047,10 +3074,10 @@ function policeFrame(dt){
   // --- física ---
   const n=Math.max(1,Math.ceil(dt/(1/240))), h=dt/n;
   for (let k=0;k<n;k++){
-    for (const p of active){ if (p.ps.garIn) continue; simStep(p.car, p.inp, false, h); cityCollide(p); }
+    for (const p of active){ if (p.ps.garIn) continue; if (p.fly){ playerFly(p,h); continue; } simStep(p.car, p.inp, false, h); cityCollide(p); }
     if (!NET.client) for (const e of POL){ if (e.wrecked) continue; if (e.air){ rampFly(e,h); continue; } simStep(e.car, e.inp, false, h); cityCollide(e); }
     if (NET.host && NET.on) for (const g of NET.ghosts) if (g.live && !g.ps.garIn && !g.ps.foot) for (const e of POL) if (!e.air) collideCars(g, e);   // la policía choca con los coches de los demás
-    for (const p of active){ bindP(p); if (PS.garIn) continue; const c=p.car, isRamp=!!MODELS[p.obj.model].ramp;
+    for (const p of active){ bindP(p); if (PS.garIn || p.fly) continue; const c=p.car, isRamp=!!MODELS[p.obj.model].ramp;
       for (const e of POL){ if (e.air) continue;
         const vE=e.car.vx*Math.sin(e.car.th)+e.car.vz*Math.cos(e.car.th);   // velocidad hacia delante de la policía ANTES del choque
         const vP=c.vx*Math.sin(c.th)+c.vz*Math.cos(c.th);                     // mi velocidad hacia delante ANTES del choque
@@ -3072,12 +3099,20 @@ function policeFrame(dt){
         }
       }
     }
-    if (two && !players[0].ps.garIn && !players[1].ps.garIn) collideCars(players[0], players[1]);
-    if (NET.on) for (const p of active) if (!p.ps.garIn && !p.ps.over) for (const g of NET.ghosts) if (g.live && !g.ps.garIn && !g.ps.foot && !g.ps.over) collideCars(p, g);
+    if (two && !players[0].ps.garIn && !players[1].ps.garIn && !players[0].fly && !players[1].fly){ const A=players[0], B=players[1];
+      collideCars(A, B, (nx,nz,vrel)=>{ if (-vrel<RAMP_MIN) return false;   // La Rampa de uno lanza al otro si le entra de frente
+        if (rampSide(A) && canFly(B) && Math.sin(A.car.th)*nx+Math.cos(A.car.th)*nz>0.55){ playerLaunch(B, A, -vrel); return true; }
+        if (rampSide(B) && canFly(A) && -(Math.sin(B.car.th)*nx+Math.cos(B.car.th)*nz)>0.55){ playerLaunch(A, B, -vrel); return true; }
+        return false; }); }
+    if (NET.on) for (const p of active) if (!p.ps.garIn && !p.ps.over) for (const g of NET.ghosts) if (g.live && !g.ps.garIn && !g.ps.foot && !g.ps.over && !p.fly && Math.abs((g.car.y||0)-p.car.y)<1.5) collideCars(p, g, (nx,nz,vrel)=>{
+      if (-vrel<RAMP_MIN) return false; const gR=MODELS[g.st.m] && MODELS[g.st.m].ramp;   // online: cada uno se lanza a sí mismo
+      if (gR && canFly(p) && -(Math.sin(g.car.th)*nx+Math.cos(g.car.th)*nz)>0.55){ playerLaunch(p, g, -vrel); return true; }
+      if (rampSide(p) && Math.sin(p.car.th)*nx+Math.cos(p.car.th)*nz>0.55) return true;   // yo llevo La Rampa: el otro sale volando en su ordenador
+      return false; });
     if (!NET.client) for (let i=0;i<POL.length;i++) if (!POL[i].air) for (let j=i+1;j<POL.length;j++) if (!POL[j].air) collideCars(POL[i],POL[j]);
     parkedUpdate(h);
   }
-  peopleVsCars(); copsUpdate(dt); if (!NET.client) turretUpdate(dt); rampGun(dt); footHud();
+  peopleVsCars(); copsUpdate(dt); if (!NET.client) turretUpdate(dt); rampGun(dt); autoGun(dt); footHud();
   for (const p of active) if (p.ps.incog && p.ps.foot) revealIncog(p);   // a pie ya no hay disfraz
   for (const p of active){ bindP(p); if (!PS.over && !PED.trans && !PED.roll && !PS.garIn) garageCheck(dt); }
   if (!RUN.over){
@@ -3115,7 +3150,7 @@ function policeFrame(dt){
     // bloqueo: rodeado y sin poder moverse
     for (const p of active){ bindP(p); const c=p.car; if (PS.over || PS.garIn){ PS.block=0; continue; }
       const v=Math.hypot(c.vx,c.vz), touching=POL.filter(e=>!e.wrecked && e.touchT>0 && (e.touchP||players[0])===p).length;
-      const blocked = !PS.foot && v<1.5 && (touching>=2 || (touching>=1 && p.bTouch>0));
+      const blocked = !PS.foot && !p.fly && v<1.5 && (touching>=2 || (touching>=1 && p.bTouch>0));
       PS.block = blocked ? PS.block+dt : Math.max(0, PS.block-dt*2);
       if (two){ if (PS.block>0.3) toastP(p,'¡BLOQUEADO! '+Math.max(0,3-PS.block).toFixed(1)+' s','bad',0.2); }
       else { $('pWarn').hidden = PS.block<0.3; if (PS.block>0.3) $('pWarnT').textContent = Math.max(0,3-PS.block).toFixed(1)+' s'; }
@@ -3397,7 +3432,7 @@ function holdStill(inp, c){ inp.steer=0; inp.hb=false; inp.nitro=false; inp.brk 
 const selOf = p => p.id===0 ? PSAVE.sel : PSAVE.sel2;
 function syncFootClass(){ document.body.classList.toggle('onfoot', policeMode && !!players[0].ps.foot); }
 function garageExit(p){   // coloca al jugador saliendo de la puerta del garaje (a dos jugadores, uno a cada lado)
-  const c=p.car; c.x=GAR.sx; c.z=GAR.z+(RUN.n===2 ? (p.id?3.2:-3.2) : 0); c.y=0; c.th=Math.PI/2; c.vx=c.vz=c.w=c.steer=c.ax=0; c.vlong=c.vlat=c.slipR=c.slipF=0; c.drOn=false; c.dA=0;
+  const c=p.car; p.fly=null; c.pitch=0; c.roll=0; c.x=GAR.sx; c.z=GAR.z+(RUN.n===2 ? (p.id?3.2:-3.2) : 0); c.y=0; c.th=Math.PI/2; c.vx=c.vz=c.w=c.steer=c.ax=0; c.vlong=c.vlat=c.slipR=c.slipF=0; c.drOn=false; c.dA=0;
   p.inp.thr=p.inp.brk=p.inp.steer=0; p.inp.nitro=false; p.ps.nitroOn=false; for (const w of p.obj.wheels) w.last=null; p.ps.garArmed=false;
   updateCarVisual(p,0); snapCam(p);
 }
@@ -3659,6 +3694,34 @@ function rampShoot(p){
   if (big && what!=='air'){ SFX.explosion(x,z); for (let i=0;i<16*PQ;i++) spawn(FIRE,{x:x+rnd(-1,1),y:Math.max(0.2,y)+rnd(0,1),z:z+rnd(-1,1),vx:rnd(-5,5),vy:rnd(2,7),vz:rnd(-5,5),life:rnd(0.3,0.7),s0:1.2,s1:3.5,a:1,c0:0xffd27a,c1:0xff3000,drag:0.9}); }   // cañonazo
   if (hit){ SFX.impactAt(x,z,0.5); for (let i=0;i<5;i++) spawn(FIRE,{x,y,z,vx:rnd(-3,3),vy:rnd(1,4),vz:rnd(-3,3),life:0.15,s0:0.4,s1:0.1,a:1,c0:0xfff0b0,c1:0xff7a20}); bindP(p); copHurt(p, hit, G.dmg); }
   if (cop){ copDie(cop, d.x*5, d.z*5); toastP(p,'¡Policía abatido!','good',1); }
+}
+// Disparo automático de la torreta (La Rampa, o el blindado / tanque robados): mientras se mantiene G (J1) o la coma (J2),
+// la torreta gira sola hacia el coche de policía más cercano que se vea y le dispara.
+const AUTO_KEY = ['KeyG','Comma'];
+function gunMuzzle(p, out){
+  const K=gunKindOf(p)||'ramp', c=p.car, mz=p.obj.g.userData.muzzle; p.obj.g.updateMatrixWorld(true);
+  if (mz) mz.getWorldPosition(out);
+  else { const a=c.th+(p.obj.tur?p.obj.tur.rotation.y:0); out.set(c.x+Math.sin(a)*GUN[K].len, c.y+p.obj.turY+(K==='tank'?0.4:0.3), c.z+Math.cos(a)*GUN[K].len); }
+  return out;
+}
+function autoGun(dt){
+  for (const p of active){ const S=p.ps, K=gunKindOf(p); p.agCD=Math.max(0,(p.agCD||0)-dt);
+    if (!K || S.foot || S.over || S.garIn || p.wrecked || p.fly || paused || !keys[AUTO_KEY[p.id]]) continue;
+    if (p.id===0 && RG.on) continue;   // apuntando con el ratón manda el ratón
+    const c=p.car; let best=null, bd=MIL_RANGE;
+    for (const e of POL){ if (e.wrecked || e.air) continue; const d=Math.hypot(e.car.x-c.x,e.car.z-c.z); if (d<bd && los(c.x,c.z,e.car.x,e.car.z)){ bd=d; best=e; } }
+    if (!best) continue;
+    const tur=p.obj.g.userData.tur||p.obj.tur; if (tur) tur.rotation.y=angDiff(0, Math.atan2(best.car.x-c.x,best.car.z-c.z)-c.th);
+    if (p.agCD>0) continue;
+    const G=PGUN[K], big=K==='tank'; p.agCD=G.cd;
+    gunMuzzle(p,_v1); const ex=best.car.x, ez=best.car.z, ey=(best.car.y||0)+1;
+    tracer(_v1.x,_v1.y,_v1.z, ex,ey,ez);
+    for (let i=0;i<(big?14:3);i++) spawn(FIRE,{x:_v1.x,y:_v1.y,z:_v1.z,vx:rnd(-2,2),vy:rnd(0,1),vz:rnd(-2,2),life:0.07,s0:big?1.4:0.5,s1:0.15,a:1,c0:0xfff0b0,c1:0xff9a30});
+    SFX.shot(c.x,c.z); SFX.impactAt(ex,ez,0.5); p.hit=Math.max(p.hit,big?0.5:0.08);
+    if (big){ SFX.explosion(ex,ez); for (let i=0;i<16*PQ;i++) spawn(FIRE,{x:ex+rnd(-1,1),y:rnd(0.3,1.5),z:ez+rnd(-1,1),vx:rnd(-5,5),vy:rnd(2,7),vz:rnd(-5,5),life:rnd(0.3,0.7),s0:1.2,s1:3.5,a:1,c0:0xffd27a,c1:0xff3000,drag:0.9}); }
+    bindP(p); copHurt(p, best, G.dmg);
+  }
+  bindP(players[0]);
 }
 function gunCam(p, dt){   // cámara detrás de la torreta, mirando adonde apuntas
   const c=p.car, cam=p.camera, yaw=c.th+RG.yaw, pt=RG.pitch, cp=Math.cos(pt), G=PGUN[gunKindOf(p)||'ramp'];
@@ -4100,7 +4163,10 @@ function loadPeer(){
   if (window.Peer) return Promise.resolve();
   return new Promise((res, rej)=>{ const s=document.createElement('script'); s.src=PEER_JS; s.onload=res; s.onerror=()=>rej(new Error('peerjs')); document.head.appendChild(s); });
 }
-const myInfo = () => ({model:PSAVE.sel.model, color:PSAVE.sel.color, skin:skinOf(players[0])});
+const myName = () => String(PSAVE.name||'').replace(/\s+/g,' ').trim().slice(0,14);
+const myInfo = () => Object.assign({model:PSAVE.sel.model, color:PSAVE.sel.color, skin:skinOf(players[0])}, myName()?{name:myName()}:{});
+const slotName = i => String((NET.slots[i] && NET.slots[i].name) || 'J'+(i+1)).slice(0,14);   // nombre que ha elegido cada jugador (o J1, J2…)
+const esc = t => String(t).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const netCount = () => NET.slots.filter(Boolean).length;
 function netSend(m){ if (NET.hostConn && NET.hostConn.open) try{ NET.hostConn.send(m); }catch(_){} }   // jugador -> anfitrión
 function netTo(slot, m){ const c=NET.conns[slot]; if (c && c.open) try{ c.send(m); }catch(_){} }   // anfitrión -> un jugador
@@ -4134,10 +4200,11 @@ function netLobby(){
   if (menuState==='onHost') showMenu('onHost');
 }
 function netDrop(slot){
+  const nm=slotName(slot);
   delete NET.conns[slot]; NET.slots[slot]=null;
   const g=ghostOf(slot); if (g){ netGhostKill(g); NET.ghosts.splice(NET.ghosts.indexOf(g),1); }
   netAll({t:'left', s:slot}); netLobby();
-  if (NET.started){ toastP(players[0],'J'+(slot+1)+' se ha ido de la partida','bad',2.5); netCheckEnd(); }
+  if (NET.started){ toastP(players[0],nm+' se ha ido de la partida','bad',2.5); netCheckEnd(); }
 }
 function netStartGame(){   // el anfitrión empieza (o repite) la partida para todos
   if (!NET.host || netCount()<2) return;
@@ -4173,9 +4240,9 @@ function netClose(){
 // --- mensajes ---
 function netOnHost(slot, d){
   const g=ghostOf(slot);
-  if (d.t==='hello'){ NET.slots[slot]=Object.assign({name:'J'+(slot+1)}, d.info||{}); netLobby(); }
+  if (d.t==='hello'){ const inf=Object.assign({}, d.info||{}); inf.name=String(inf.name||'').slice(0,14).trim() || 'J'+(slot+1); NET.slots[slot]=Object.assign({}, inf); netLobby(); }
   else if (d.t==='st' && g){ const was=g.st && g.st.ov; netGhostState(g, d.s);
-    if (NET.started && d.s.ov && !was){ for (const p of alive()) toastP(p,'¡Han pillado a J'+(slot+1)+'! Pulsa '+(slot+1)+' para revivirlo (50 oro)','bad',3); netCheckEnd(); } }
+    if (NET.started && d.s.ov && !was){ for (const p of alive()) toastP(p,'¡Han pillado a '+slotName(slot)+'! Pulsa '+(slot+1)+' para revivirlo (50 oro)','bad',3); netCheckEnd(); } }
   else if (d.t==='hurt' && g){ const e=POL.find(q=>q.nid===d.id); if (e && !e.wrecked) copHurt(g, e, d.dmg); }
   else if (d.t==='launch' && g){ const e=POL.find(q=>q.nid===d.id); if (e && !e.wrecked && !e.air && e.kind!=='tank') rampLaunch(e, g, d.v); }
   else if (d.t==='take'){ const i=BAGS.findIndex(q=>q.id===d.id); if (i>=0){ scene.remove(BAGS[i].g); BAGS.splice(i,1); netTo(slot, {t:'got'}); } }
@@ -4193,7 +4260,7 @@ function netOnClient(d){
   else if (d.t==='fx') netFx(d);
   else if (d.t==='rev') netRevived(d.by);
   else if (d.t==='end') netEnd();
-  else if (d.t==='left'){ NET.slots[d.s]=null; const g=ghostOf(d.s); if (g){ netGhostKill(g); NET.ghosts.splice(NET.ghosts.indexOf(g),1); } if (NET.on) toastP(players[0],'J'+(d.s+1)+' se ha ido de la partida','bad',2.5); else if (menuState==='onJoin') showMenu('onJoin'); }
+  else if (d.t==='left'){ const nm=slotName(d.s); NET.slots[d.s]=null; const g=ghostOf(d.s); if (g){ netGhostKill(g); NET.ghosts.splice(NET.ghosts.indexOf(g),1); } if (NET.on) toastP(players[0],nm+' se ha ido de la partida','bad',2.5); else if (menuState==='onJoin') showMenu('onJoin'); }
 }
 // --- partida ---
 function startOnline(){
@@ -4204,7 +4271,7 @@ function startOnline(){
   const p=players[0], off=[[0,-3.2],[0,3.2],[7.5,-3.2],[7.5,3.2]][NET.me]||[0,0];   // cada uno sale en su sitio delante del garaje
   p.car.x+=off[0]; p.car.z+=off[1]; updateCarVisual(p,0); snapCam(p);
   if (NET.host) for (let k=0;k<3*(netCount()-1);k++) spawnPolice('patrol');   // 3 patrullas por jugador
-  toastP(p, 'Online · eres J'+(NET.me+1)+' · '+netCount()+' jugadores', 'good', 3);
+  toastP(p, 'Online · eres '+slotName(NET.me)+' (J'+(NET.me+1)+') · '+netCount()+' jugadores', 'good', 3);
 }
 function netEnd(){   // han pillado a todos
   if (RUN.over) return; RUN.over=true;
@@ -4259,7 +4326,7 @@ function netApplyWorld(w){
     if (!w.pl[i]){ if (g) g.live=false; continue; }
     if (!g){ g=netGhost(i); NET.ghosts.push(g); }
     const was=g.st && g.st.ov; netGhostState(g, w.pl[i]);
-    if (w.pl[i].ov && !was && !players[0].ps.over) toastP(players[0],'¡Han pillado a J'+(i+1)+'! Pulsa '+(i+1)+' para revivirlo (50 oro)','bad',3); }
+    if (w.pl[i].ov && !was && !players[0].ps.over) toastP(players[0],'¡Han pillado a '+slotName(i)+'! Pulsa '+(i+1)+' para revivirlo (50 oro)','bad',3); }
 }
 function netPolInterp(dt){   // jugador (no anfitrión): la policía va adonde dice el anfitrión, suavizado
   const now=performance.now(), k=Math.min(1, dt*12);
@@ -4288,14 +4355,14 @@ function netFx(d){   // disparo de una torreta que ve el anfitrión
 function netReviveReq(slot){
   if (!NET.on || RUN.over || slot===NET.me) return;
   const st=netStateOf(slot), p=players[0]; if (!st || !st.ov || p.ps.over) return;
-  if (PSAVE.gold<RESCUE_PRICE){ toastP(p,'Te faltan '+(RESCUE_PRICE-PSAVE.gold)+' oro para revivir a J'+(slot+1),'bad',1.6); return; }
+  if (PSAVE.gold<RESCUE_PRICE){ toastP(p,'Te faltan '+(RESCUE_PRICE-PSAVE.gold)+' oro para revivir a '+slotName(slot),'bad',1.6); return; }
   PSAVE.gold-=RESCUE_PRICE; psave(); st.ov=0; NET.revKey='';
-  toastP(p,'Has revivido a J'+(slot+1)+' · −'+RESCUE_PRICE+' oro','good',2); SFX.pickup();
+  toastP(p,'Has revivido a '+slotName(slot)+' · −'+RESCUE_PRICE+' oro','good',2); SFX.pickup();
   if (NET.host) netTo(slot, {t:'rev', by:0}); else netSend({t:'rev', to:slot});
 }
 function netRevived(by){
   const p=players[0]; bindP(p); if (!PS.over || RUN.over) return;
-  rescue(p); syncFootClass(); p.hud.v.classList.remove('out'); toastP(p,'¡J'+(by+1)+' te ha revivido!','good',2.5);
+  rescue(p); syncFootClass(); p.hud.v.classList.remove('out'); toastP(p,'¡'+slotName(by)+' te ha revivido!','good',2.5);
 }
 function netRevUI(dt){
   NET.revT-=dt; if (NET.revT>0) return; NET.revT=0.25;
@@ -4303,7 +4370,7 @@ function netRevUI(dt){
   const key=list.join(',')+'|'+(PSAVE.gold>=RESCUE_PRICE); if (key===NET.revKey) return; NET.revKey=key;
   const el=$('netRev'); el.innerHTML=''; el.hidden=!list.length;
   for (const s of list){ const b=document.createElement('button'); b.type='button'; b.disabled=PSAVE.gold<RESCUE_PRICE;
-    b.innerHTML='<b style="color:'+SLOT_COL[s]+'">'+(IS_MOBILE?'Toca':'Pulsa '+(s+1))+'</b> · Revivir a J'+(s+1)+' · '+RESCUE_PRICE+' oro';
+    b.innerHTML='<b style="color:'+SLOT_COL[s]+'">'+(IS_MOBILE?'Toca':'Pulsa '+(s+1))+'</b> · Revivir a '+esc(slotName(s))+' · '+RESCUE_PRICE+' oro';
     b.addEventListener('pointerdown', e=>{ e.preventDefault(); netReviveReq(s); }); el.appendChild(b); }
 }
 // --- los demás jugadores en mi pantalla (y, en el anfitrión, como objetivos de la policía) ---
@@ -4314,9 +4381,10 @@ function netGhost(slot){
 }
 function netGhostKill(g){ if (g.obj) disposeCar(g.obj); if (g.B) scene.remove(g.B.g); if (g.label) scene.remove(g.label); g.obj=null; g.B=null; g.label=null; }
 function netLabel(slot){
-  const cv=document.createElement('canvas'); cv.width=128; cv.height=64; const x=cv.getContext('2d');
-  x.font='800 46px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.lineWidth=9; x.strokeStyle='rgba(0,0,0,.8)'; x.strokeText('J'+(slot+1),64,34); x.fillStyle=SLOT_COL[slot]; x.fillText('J'+(slot+1),64,34);
-  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv), depthWrite:false})); s.scale.set(2.4,1.2,1); scene.add(s); return s;
+  const t=slotName(slot), cv=document.createElement('canvas'); cv.width=512; cv.height=96; const x=cv.getContext('2d');   // el nombre que eligió, encima de su coche
+  let f=60; x.font='800 '+f+'px sans-serif'; while (f>28 && x.measureText(t).width>490){ f-=4; x.font='800 '+f+'px sans-serif'; }
+  x.textAlign='center'; x.textBaseline='middle'; x.lineWidth=11; x.strokeStyle='rgba(0,0,0,.8)'; x.strokeText(t,256,50); x.fillStyle=SLOT_COL[slot]; x.fillText(t,256,50);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv), depthWrite:false, depthTest:false})); s.scale.set(6.4,1.2,1); s.renderOrder=5; scene.add(s); return s;
 }
 function netGhostState(g, s){
   const first=!g.live || !g.st; g.st=s; g.live=true; g.net={...s, t:performance.now()};
@@ -4484,6 +4552,9 @@ function showMenu(state){
     polMenu='online'; netClose();
     $('menuTitle').textContent='Jugar online';
     $('menuSub').innerHTML=(NET.msg?'<b style="color:#ff8a1f">'+NET.msg+'</b><br>':'')+'Hasta 4 jugadores, cada uno en su ordenador. Uno genera el código y los demás se unen con él.<br>Cada uno juega con su coche y su personaje y se queda el oro que coge. Si pillan a un compañero, pulsa su número para revivirlo por 50 oro.<br>Coche: <b>'+MODELS[PSAVE.sel.model].name+'</b> · Personaje: <b>'+(SKINS.find(k=>k.id===PSAVE.skin)||SKINS[0]).name+'</b> · Oro: <b>'+PSAVE.gold+'</b>';
+    { const box=document.createElement('div'); box.className='codeBox'; const inp=document.createElement('input'); inp.type='text'; inp.maxLength=14; inp.placeholder='Tu nombre'; inp.value=PSAVE.name||''; inp.setAttribute('aria-label','Tu nombre (sale encima de tu coche)');
+      inp.addEventListener('input', ()=>{ PSAVE.name=inp.value.slice(0,14); psave(); }); inp.addEventListener('keydown', e=>{ e.stopPropagation(); if (e.key==='Enter') inp.blur(); }); inp.addEventListener('keyup', e=>e.stopPropagation());
+      const lb=document.createElement('div'); lb.className='codeMsg'; lb.textContent='Tu nombre: sale encima de tu coche'; box.append(lb, inp); b.appendChild(box); }
     add('Generar código',()=>netHost(),true,'Para que tus amigos se unan a tu partida').focus();
     add('Unirse',()=>{ NET.msg=''; showMenu('onJoin'); },false,'Con el código que te diga tu amigo');
     add('Garaje POLICE',()=>openGarage(1,'police'),false,'Elegir coche');
@@ -4491,13 +4562,13 @@ function showMenu(state){
     add('Volver',()=>{ NET.msg=''; showMenu('police'); });
   } else if (state==='onHost'){
     $('menuTitle').textContent = NET.code ? 'Código: '+NET.code : 'Generar código';
-    const list = NET.code ? NET.slots.map((q,i)=>q?'<span style="color:'+SLOT_COL[i]+'">●</span> J'+(i+1)+(i===0?' (tú)':'')+' · '+MODELS[q.model]?.name:'').filter(Boolean).join('<br>') : '';
+    const list = NET.code ? NET.slots.map((q,i)=>q?'<span style="color:'+SLOT_COL[i]+'">●</span> '+esc(slotName(i))+(i===0?' (tú)':'')+' · '+MODELS[q.model]?.name:'').filter(Boolean).join('<br>') : '';
     $('menuSub').innerHTML=(NET.msg?'<b style="color:#ff8a1f">'+NET.msg+'</b><br>':'')+(NET.code?'Dile este código a tus amigos: en su ordenador, Modo polis → Jugar online → Unirse.<br>'+list:'');
     const go=add('Empezar partida',NET.code && netCount()>=2 ? ()=>netStartGame() : null,true, netCount()>=2 ? netCount()+' jugadores' : 'Esperando a que se una alguien'); if (!go.disabled) go.focus();
     add('Cancelar',()=>{ netClose(); NET.msg=''; showMenu('online'); });
   } else if (state==='onJoin'){
     $('menuTitle').textContent='Unirse';
-    const list = NET.client ? NET.slots.map((q,i)=>q?'<span style="color:'+SLOT_COL[i]+'">●</span> J'+(i+1)+(i===NET.me?' (tú)':'')+' · '+MODELS[q.model]?.name:'').filter(Boolean).join('<br>') : '';
+    const list = NET.client ? NET.slots.map((q,i)=>q?'<span style="color:'+SLOT_COL[i]+'">●</span> '+esc(slotName(i))+(i===NET.me?' (tú)':'')+' · '+MODELS[q.model]?.name:'').filter(Boolean).join('<br>') : '';
     $('menuSub').innerHTML=(NET.msg?'<b style="color:#ff8a1f">'+NET.msg+'</b><br>':'')+(NET.client?list:'Escribe el código de 6 números que te ha dado tu amigo.');
     if (!NET.client){
       const box=document.createElement('div'); box.className='codeBox'; const inp=document.createElement('input'); inp.type='text'; inp.inputMode='numeric'; inp.maxLength=6; inp.placeholder='Código'; inp.setAttribute('aria-label','Código de la partida');
@@ -4510,7 +4581,7 @@ function showMenu(state){
   } else if (state==='caught'){
     const R=RUN, two=R.n===2;
     $('menuTitle').textContent= two ? 'OS HAN PILLADO' : 'ATRAPADO';
-    $('menuSub').innerHTML=(two ? 'Han caído los dos. ' : ({todos:'Os han pillado a todos. ', bloqueo:'Te han bloqueado. ', atropello:'Te ha atropellado la policía. ', disparos:'Te han abatido a tiros. ', choque:'Te has estampado al tirarte en marcha. '}[R.reason]||'Te has quedado sin vida. '))+'<br>Tiempo: <b>'+fmtT(R.t)+'</b> · Oro ganado: <b>'+R.goldRun+'</b><br>Nivel de búsqueda máximo: <b style="color:#ffd23a">'+'★'.repeat(R.lvl)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.lvl)+'</span> ('+R.lvl+'/5)'+(R.lvl>=5?' · rojas: <b style="color:#ff2a1f">'+'★'.repeat(R.red)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.red)+'</span> ('+R.red+'/5)':'')+(R.red>=5?' · naranjas: <b style="color:#ff8a1f">'+'★'.repeat(R.org)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.org)+'</span> ('+R.org+'/5)':'')+'<br>Código: <b>'+codeText()+'</b>'+(RUN.shown>=5?' (úsalo en CODE, menú polis)':'')+'<br>Mejor tiempo: <b>'+fmtT(PSAVE.best||0)+'</b>'+(R.isBest?' (¡nuevo récord!)':'')+' · Oro total: <b>'+PSAVE.gold+'</b>';
+    $('menuSub').innerHTML=(two ? 'Han caído los dos. ' : ({volteo:'Has caído boca abajo. ', todos:'Os han pillado a todos. ', bloqueo:'Te han bloqueado. ', atropello:'Te ha atropellado la policía. ', disparos:'Te han abatido a tiros. ', choque:'Te has estampado al tirarte en marcha. '}[R.reason]||'Te has quedado sin vida. '))+'<br>Tiempo: <b>'+fmtT(R.t)+'</b> · Oro ganado: <b>'+R.goldRun+'</b><br>Nivel de búsqueda máximo: <b style="color:#ffd23a">'+'★'.repeat(R.lvl)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.lvl)+'</span> ('+R.lvl+'/5)'+(R.lvl>=5?' · rojas: <b style="color:#ff2a1f">'+'★'.repeat(R.red)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.red)+'</span> ('+R.red+'/5)':'')+(R.red>=5?' · naranjas: <b style="color:#ff8a1f">'+'★'.repeat(R.org)+'</b><span style="opacity:.35">'+'★'.repeat(5-R.org)+'</span> ('+R.org+'/5)':'')+'<br>Código: <b>'+codeText()+'</b>'+(RUN.shown>=5?' (úsalo en CODE, menú polis)':'')+'<br>Mejor tiempo: <b>'+fmtT(PSAVE.best||0)+'</b>'+(R.isBest?' (¡nuevo récord!)':'')+' · Oro total: <b>'+PSAVE.gold+'</b>';
     if (NET.on){ $('menuTitle').textContent='OS HAN PILLADO'; if (NET.host) add('Otra vez (todos)',()=>{ hideOverlays(); netStartGame(); },true).focus(); else add('Esperando a que J1 empiece otra',null,true);
       add('Salir del online',()=>{ netClose(); showMenu('police'); }); }
     else { add('Otra vez',()=>startPolice(R.n),true).focus();
