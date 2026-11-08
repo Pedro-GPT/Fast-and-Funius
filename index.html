@@ -151,7 +151,7 @@ body.mode2.armed #ammo{right:calc(50% + 16px)}
 #gRescue{display:none}
 #garageUI.rescue #gRescue{display:inline-block}
 #xhair,#ammo{display:none}
-body.armed #xhair{display:block;position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;transition:width .12s,height .12s,margin .12s}
+body.armed #xhair,body.gunner #xhair{display:block;position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;transition:width .12s,height .12s,margin .12s}
 #xhair::before,#xhair::after{content:'';position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 2px rgba(0,0,0,.8)}
 #xhair::before{left:50%;top:0;bottom:0;width:2px;margin-left:-1px}
 #xhair::after{top:50%;left:0;right:0;height:2px;margin-top:-1px}
@@ -1025,7 +1025,7 @@ MODELS.push(
    lights:'quad', tail:'bar', bumpers:true, exhaust:[[-.7,.6]]}
 );
 // Coche secreto de POLICE: solo se consigue en la ruleta y no sale en ningún garaje hasta tenerlo
-MODELS.push({name:'La Rampa', secret:true, ramp:true, kind:'Coche secreto · solo polis', desc:'Buggy blindado de seis ruedas con jaula, chapas remachadas, torreta y una pala de acero con dientes: lo que le choque de frente sale volando por encima. Solo tiene 10 de vida y por los lados y por detrás es muy frágil.',
+MODELS.push({name:'La Rampa', secret:true, ramp:true, kind:'Coche secreto · solo polis', desc:'Buggy blindado de seis ruedas con jaula, chapas remachadas, torreta y una pala de acero con dientes: lo que le choque de frente sale volando por encima. Tiene 20 de vida, por los lados y por detrás es frágil, y con el ratón manejas la torreta: cada bala quita un golpe a la policía.',
    ZR:-1.95, ZF:1.95, wz:[1.4,-0.75], wz3:-1.8, wr:0.42, wx:1.0, tireW:[1.35,1.45], noArches:true, rimColor:0x2e2c2a, spokeOff:[0],
    halfW:[[-1.95,.5],[-1.6,.6],[-.5,.66],[.6,.64],[1.4,.5],[1.95,.36]], bot:[[-1.95,.42],[1.95,.38]],
    sh:[[-1.95,.95],[-1.2,.98],[-.4,.95],[.4,.86],[1.2,.7],[1.95,.55]],
@@ -1712,12 +1712,15 @@ function buildCar(m, paintHex, parent){
     // alerón trasero sobre soportes
     for (const s of [1,-1]){ T(V(s*0.32,1.25,-1.65), V(s*0.42,1.78,-2.1), 0.03); plate(0.03,0.3,0.52, rustM, s*0.96,1.74,-2.15); }
     plate(1.9,0.035,0.44, plateP, 0,1.82,-2.15, -0.12); plate(1.9,0.07,0.03, rustM, 0,1.84,-2.37);
-    // torreta con ametralladora
+    // torreta con ametralladora (en su propio grupo: gira con el ratón)
+    const nT=g.children.length;
     add(new THREE.CylinderGeometry(0.18,0.22,0.12,14), gunM, 0,1.62,-0.45);
     add(new THREE.BoxGeometry(0.12,0.14,0.55), gunM, 0,1.76,-0.36);
     add(new THREE.CylinderGeometry(0.024,0.024,0.85,10), gunM, 0,1.78,0.33, Math.PI/2);
     add(new THREE.CylinderGeometry(0.04,0.04,0.13,10), gunM, 0,1.78,0.72, Math.PI/2);
     plate(0.38,0.26,0.03, rustM, 0,1.76,-0.08); add(new THREE.BoxGeometry(0.16,0.14,0.2), new THREE.MeshStandardMaterial({color:0x4b4f2a, roughness:0.8}), 0.15,1.7,-0.45);
+    { const tur=new THREE.Group(); tur.position.set(0,1.62,-0.45); for (const m of g.children.slice(nT)){ m.position.y-=1.62; m.position.z+=0.45; tur.add(m); } g.add(tur); g.userData.tur=tur;
+      const mz=new THREE.Object3D(); mz.position.set(0,0.16,1.2); tur.add(mz); g.userData.muzzle=mz; }
     // suspensiones de las seis ruedas
     for (const z of [spec.wz[0],spec.wz[1],spec.wz3]) for (const s of [1,-1]){
       const hub=V(s*(spec.wx-0.14), spec.wr, z);
@@ -2358,6 +2361,7 @@ function camTarget(p){
 }
 function snapCam(p){ p.cam.yaw=p.car.th; p.cam.pos.copy(camTarget(p)); }
 function updateCamera(p, dt){
+  if (p.id===0 && RG.on && j1ramp()){ gunCam(p, dt); return; }
   const c=p.car, speed=Math.hypot(c.vx,c.vz), cam=p.camera;
   if (p.wrecked) p.cam.yaw += 0.35*dt;
   else {
@@ -2432,7 +2436,7 @@ CITY.SIZE = CITY.G*CITY.PITCH;
 const PRICES = [100, 200, 0, 450, 50, 300, 1000, 1200];   // por índice de MODELS (Kreisel 9 = básico, gratis)
 // En POLICE, cuanto más caro, mejor: puesto por precio (0 = el más barato) y de ahí potencia, empuje, agarre y vida
 const POL_RANK = (()=>{ const ids=PRICES.map((_,i)=>i).sort((a,b)=>PRICES[a]-PRICES[b]); const r=[]; ids.forEach((i,k)=>r[i]=k/(ids.length-1)); return r; })();
-function polTier(i){ const sc=MODELS[i]&&MODELS[i].secret, t=sc?0.7:(POL_RANK[i]||0); return {t, hp:sc?10:20+Math.round(10*t), powK:1+0.4*t, gripK:1+0.15*t, boostA:16*t, boostP:900*t}; }
+function polTier(i){ const sc=MODELS[i]&&MODELS[i].secret, t=sc?0.7:(POL_RANK[i]||0); return {t, hp:sc?20:20+Math.round(10*t), powK:1+0.4*t, gripK:1+0.15*t, boostA:16*t, boostP:900*t}; }
 const PSTATS_C = [];
 function PSTATS(i){   // datos medidos con la propia física: 0–170 km/h y velocidad punta
   if (PSTATS_C[i]) return PSTATS_C[i];
@@ -2635,16 +2639,17 @@ function cityCollide(e){
   }
 }
 // Blindado militar (solo aparece si llevas La Rampa desde la 3.ª estrella): carrocería del todoterreno, ruedas gordas y torreta
+MODELS.push(Object.assign({}, MODELS.find(m=>m.police==='van'), {name:'Tanque', police:'tank', exhaust:[]}));   // tanque: el furgón por debajo, tapado por casco, orugas y torreta
 MODELS.push(Object.assign({}, MODELS.find(m=>m.police==='suv'), {name:'Blindado militar', police:'mil', wr:0.46, tireW:[1.35,1.35], exhaust:[[-.6,.55]]}));
 // ---------- Policía ----------
 function policeIdx(kind){ return MODELS.findIndex(m=>m.police===kind); }
-const POL_HP = {patrol:2, suv:3, van:4, mil:4};   // golpes para destruir cada tipo
-const POL_NAME = {patrol:'¡Patrulla eliminada!', suv:'¡Todoterreno eliminado!', van:'¡Furgón eliminado!', mil:'¡Blindado militar eliminado!'};
+const POL_HP = {patrol:2, suv:3, van:4, mil:4, tank:6};   // golpes para destruir cada tipo
+const POL_NAME = {patrol:'¡Patrulla eliminada!', suv:'¡Todoterreno eliminado!', van:'¡Furgón eliminado!', mil:'¡Blindado militar eliminado!', tank:'¡Tanque destruido!'};
 function policeLivery(o, kind){
   const g=o.pctx, W=PW, H=PH;
   g.fillStyle = kind==='van' ? '#1b2533' : '#111317'; g.fillRect(0,0,W,H);
   g.fillStyle='#f1f1ee';
-  if (kind==='mil'){ g.fillStyle='#4b5531'; g.fillRect(0,0,W,H); const cols=['#2f3720','#6b6a45','#3d2f1f'];   // camuflaje militar
+  if (kind==='mil' || kind==='tank'){ g.fillStyle='#4b5531'; g.fillRect(0,0,W,H); const cols=['#2f3720','#6b6a45','#3d2f1f'];   // camuflaje militar
     for (let i=0;i<70;i++){ g.fillStyle=cols[i%3]; g.beginPath(); g.ellipse(Math.random()*W, Math.random()*H, W*rnd(0.03,0.09), H*rnd(0.03,0.08), Math.random()*3, 0, Math.PI*2); g.fill(); }
     o.paintTex.needsUpdate=true; o.paintHex='#4b5531'; return; }
   if (kind==='van'){ g.fillRect(0,H*0.28,W,H*0.06); g.fillRect(0,H*0.66,W,H*0.06); }
@@ -2655,6 +2660,7 @@ function addLightbar(o, kind){
   const B=o.B, spec=MODELS[o.model]; let zc=0, top=-1;
   for (let z=spec.ZR+0.3; z<spec.ZF-0.3; z+=0.05){ const y=B.topY(z,0); if (y>top){ top=y; zc=z; } }
   if (kind==='mil') return addTurret(o, top, zc-0.3);
+  if (kind==='tank') return addTank(o);
   const g=new THREE.Group(); g.position.set(0,top-0.01,zc); o.g.add(g);
   const base=new THREE.Mesh(new THREE.BoxGeometry(kind==='van'?1.5:1.25,0.1,0.28), new THREE.MeshStandardMaterial({color:0x111111, roughness:0.5})); base.position.y=0.05; g.add(base);
   const red=new THREE.MeshStandardMaterial({color:0x550000, emissive:0xff1010, emissiveIntensity:2.5});
@@ -2679,6 +2685,22 @@ function addTurret(o, top, zc){   // torreta con ametralladora que gira hacia el
   o.tur=head; o.turY=top+0.45;
   return [new THREE.MeshStandardMaterial(), new THREE.MeshStandardMaterial()];
 }
+function addTank(o){   // casco, orugas y torreta con cañón sobre el chasis del furgón (que queda oculto)
+  for (const ch of o.g.children) ch.visible=false;
+  const camo=o.paint.clone(); camo.vertexColors=false; camo.roughness=0.8; camo.metalness=0.2; if (camo.clearcoat!==undefined) camo.clearcoat=0;
+  const dark=new THREE.MeshStandardMaterial({color:0x22241e, roughness:0.85, metalness:0.3}), steel=new THREE.MeshStandardMaterial({color:0x3a3d33, roughness:0.6, metalness:0.6});
+  const box=(w,h,d,m,x,y,z,rx=0,par=o.g)=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); b.position.set(x,y,z); b.rotation.x=rx; b.castShadow=true; par.add(b); return b; };
+  for (const sx of [-1,1]){ box(0.62,0.95,5.9,dark,sx*1.0,0.5,0);   // orugas
+    for (let i=0;i<6;i++){ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,0.1,14),steel); w.rotation.z=Math.PI/2; w.position.set(sx*1.33,0.42,-2.3+i*0.92); o.g.add(w); }
+    box(0.7,0.08,6.1,camo,sx*1.0,1.02,0); }   // guardabarros
+  box(1.5,0.75,5.4,camo,0,1.1,0); box(2.2,0.18,4.6,camo,0,1.42,-0.1); box(1.8,0.4,0.6,camo,0,1.05,2.75,-0.5);   // casco
+  const t=new THREE.Group(); t.position.set(0,1.5,-0.4); o.g.add(t);
+  const tb=box(1.7,0.62,2.3,camo,0,0.32,0,0,t); box(1.5,0.3,0.6,camo,0,0.5,1.25,-0.45,t); box(0.5,0.2,0.5,steel,0.45,0.72,-0.4,0,t);
+  const cn=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.13,3.2,12),steel); cn.rotation.x=Math.PI/2; cn.position.set(0,0.38,2.8); cn.castShadow=true; t.add(cn);
+  const mb=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.17,0.4,12),dark); mb.rotation.x=Math.PI/2; mb.position.set(0,0.38,4.3); t.add(mb);
+  o.tur=t; o.turY=1.9; o.tankParts=camo;
+  return [new THREE.MeshStandardMaterial(), new THREE.MeshStandardMaterial()];
+}
 function spawnPolice(kind){
   const pls=active.map(p=>p.car), pl=pls[0];   // aparece lejos de todos los jugadores
   const far=(ni,nj)=>pls.every(c=>{ const pn=[clampNode(Math.round(c.x/CITY.PITCH)), clampNode(Math.round(c.z/CITY.PITCH))]; return Math.abs(ni-pn[0])+Math.abs(nj-pn[1])>=4 && Math.hypot(nodeX(ni)-c.x,nodeX(nj)-c.z)>=220; });
@@ -2692,15 +2714,16 @@ function spawnPolice(kind){
   const hwM = Math.max(...spec.halfW.map(q=>q[1]));
   const e={kind, obj, lights, inp:{thr:0,brk:0,steer:0,hb:false}, wrecked:false, hit:0, dmg:0, dmgX:0, dmgZ:0, scratchT:0,
     car:{x:nodeX(ni), y:0, z:nodeX(nj), th, vx:0, vz:0, w:0, steer:0, vlong:0, vlat:0, slipR:0, slipF:0, idx:0, grass:false, ax:0, pitch:0,
-      gripK: kind==='suv'||kind==='mil'?1.1:1, driftK:0, hl:(spec.ZF-spec.ZR)/2, hw:hwM, mass: kind==='van'?4:kind==='mil'?2.4:kind==='suv'?1.8:1.2,
-      boostA: 0, boostP: 0, powK: kind==='van'?1 : kind==='mil'?1.6 : kind==='suv'?1.9 : 1.5},
-    vmax: kind==='van'?30 : kind==='mil'?95 : kind==='suv'?115 : 106, thinkT:0, wp:null, stuckT:0, revT:0, ramCD:0, touchT:0, role: kind==='van'?'block' : (Math.random()<WANT.cut[PS.lvl-1] ? 'cut':'chase'), parkT:0, hp: POL_HP[kind], hitCD:0, shotT:rnd(1,2), turA:0};
+      gripK: kind==='suv'||kind==='mil'||kind==='tank'?1.1:1, driftK:0, hl:(spec.ZF-spec.ZR)/2, hw:hwM, mass: kind==='van'?4:kind==='tank'?6:kind==='mil'?2.4:kind==='suv'?1.8:1.2,
+      boostA: 0, boostP: 0, powK: kind==='van'||kind==='tank'?1 : kind==='mil'?1.6 : kind==='suv'?1.9 : 1.5},
+    vmax: kind==='van'?30 : kind==='tank'?50 : kind==='mil'?95 : kind==='suv'?115 : 106, thinkT:0, wp:null, stuckT:0, revT:0, ramCD:0, touchT:0, role: kind==='van'||kind==='tank'?'block' : (Math.random()<WANT.cut[PS.lvl-1] ? 'cut':'chase'), parkT:0, hp: POL_HP[kind], hitCD:0, shotT:rnd(1,2), turA:0};
   POL.push(e); updateCarVisual(e,0);
 }
 function policeExplode(e){
   e.wrecked=true; e.deadT=6; const c=e.car, o=e.obj; SFX.explosion(c.x,c.z);
   const vx=c.vx*0.25, vz=c.vz*0.25; c.vx*=0.3; c.vz*=0.3; c.w=0; e.inp.thr=0; e.inp.brk=1;
   const g=o.pctx; g.fillStyle='rgba(18,16,14,0.9)'; g.fillRect(0,0,PW,PH); o.paintTex.needsUpdate=true; o.paint.roughness=0.85; o.paint.metalness=0.2;
+  if (o.tankParts){ o.tankParts.color.setHex(0x2a2826); }
   o.glass.color.setHex(0x1b1b1b); e.lights[0].emissiveIntensity=0; e.lights[1].emissiveIntensity=0; o.tailM.emissiveIntensity=0;
   const sn=Math.sin(c.th), cs=Math.cos(c.th);
   for (let i=0;i<(IS_MOBILE?6:12);i++){ const m=new THREE.Mesh(new THREE.IcosahedronGeometry(rnd(0.1,0.3),0), Math.random()<0.6?o.paint:o.carbon); m.castShadow=true;
@@ -2715,13 +2738,14 @@ const RAMP_G=11.8, RAMP_MIN=8, RAMP_UPSIDE=0.4;   // RAMP_UPSIDE: probabilidad d
 function copHurt(p, e){   // un golpe a la policía; si era el último, explota y me rellena la vida
   const maxH = POL_HP[e.kind]; e.hp--;
   if (e.hp<=0){ policeExplode(e); p.ps.hp=p.ps.maxHp;
+    if (e.kind==='mil'){ const n=Math.min(2, MIL_MAX-POL.filter(q=>q.kind==='mil' && !q.wrecked).length); for (let i=0;i<n;i++) spawnPolice('mil'); if (n>0){ SFX.warn(); setTimeout(()=>toastP(p,'¡Vienen '+(n===2?'dos':'uno')+' más!','bad',1.8), 1900); } }
     toastP(p, POL_NAME[e.kind]+' · vida al máximo','good',1.8); }
   else toastP(p,'Golpe a la policía · '+(maxH-e.hp)+'/'+maxH,'good',1.2);
 }
 function rampLaunch(e, p, closing){
   const c=e.car, m=p.car, vy=clamp(closing*0.47,6,11), T=2*vy/RAMP_G, turns=Math.max(1,Math.round(T*0.7));
   const dx=c.x-m.x, dz=c.z-m.z, dl=Math.hypot(dx,dz)||1, back=Math.max(4, closing*0.1);   // sale hacia atrás (hacia mí y por encima), nunca hacia delante
-  const up=e.kind!=='mil' && Math.random()<RAMP_UPSIDE;   // el blindado militar siempre cae de pie   // ¿cae boca abajo? media vuelta más y explota al caer
+  const up=e.kind!=='mil' && e.kind!=='tank' && Math.random()<RAMP_UPSIDE;   // el blindado militar siempre cae de pie   // ¿cae boca abajo? media vuelta más y explota al caer
   e.air={p, vy, up, rp:-(2*Math.PI*turns+(up?Math.PI:0))/T, rr:up?0:(Math.random()<0.5?-1:1)*2*Math.PI*(Math.random()<0.5?0:1)/T, ry:rnd(-1,1)};
   const away=Math.max(0,(c.vx*dx+c.vz*dz)/dl*0.5);   // si se alejaba de mí, eso se anula: siempre sale hacia atrás
   c.vx=c.vx*0.5-dx/dl*(back+away); c.vz=c.vz*0.5-dz/dl*(back+away); c.y=0.25; c.w=0; c.pitch=0; c.roll=0; c.vlong=c.vlat=c.slipR=c.slipF=0; e.inp.thr=0; e.inp.hb=false;
@@ -2944,7 +2968,7 @@ function rescue(p){   // el compañero vuelve a la partida saliendo del garaje, 
 const HEADON_MIN=50;   // km/h: por debajo, un toque de frente no daña a la policía aunque yo vaya más rápido
 function ramDamage(e, vE){
   const v=vE*3.6;
-  let d=Math.round(2+(v-100)/25); if (e.kind==='suv' || e.kind==='mil') d=Math.ceil(d*1.5);
+  let d=Math.round(2+(v-100)/25); if (e.kind==='suv' || e.kind==='mil') d=Math.ceil(d*1.5); else if (e.kind==='tank') d*=2;
   return clamp(d,1,12);
 }
 function policeFrame(dt){
@@ -3010,7 +3034,7 @@ function policeFrame(dt){
     for (let i=0;i<POL.length;i++) if (!POL[i].air) for (let j=i+1;j<POL.length;j++) if (!POL[j].air) collideCars(POL[i],POL[j]);
     parkedUpdate(h);
   }
-  peopleVsCars(); copsUpdate(dt); turretUpdate(dt);
+  peopleVsCars(); copsUpdate(dt); turretUpdate(dt); rampGun(dt); footHud();
   for (const p of active) if (p.ps.incog && p.ps.foot) revealIncog(p);   // a pie ya no hay disfraz
   for (const p of active){ bindP(p); if (!PS.over && !PED.trans && !PED.roll && !PS.garIn) garageCheck(dt); }
   if (!RUN.over){
@@ -3024,15 +3048,16 @@ function policeFrame(dt){
     // refuerzos, cada vez más seguidos
     let L=1; while (L<5 && RUN.t>=WANT.t[L]) L++;
     if (L>RUN.lvl){ RUN.lvl=L; starsHud(L); revealStars(L); if (L===5){ SFX.warn(); RUN.t5=RUN.t; starsRedHud(0); } else SFX.level();
-      for (const e of POL) if (e.kind!=='van') e.role = Math.random()<WANT.cut[L-1] ? 'cut':'chase';
+      for (const e of POL) if (e.kind!=='van' && e.kind!=='tank') e.role = Math.random()<WANT.cut[L-1] ? 'cut':'chase';
       RUN.ns=Math.min(RUN.ns, 0.5); }
     // estrellas rojas: una cada 3 min desde la 5.ª amarilla; cada una trae 3 furgones blindados más
     if (RUN.lvl===5 && RUN.red<5 && RUN.t-RUN.t5 >= 180*(RUN.red+1)){ RUN.red++; starsRedHud(RUN.red); SFX.redLevel(); PSAVE.gold+=150; RUN.goldRun+=150; psave(); for (const p of alive()) toastP(p,'Estrella roja: +150 oro','good',2); { const nb=Math.min(BAGS.length, 5*Math.pow(2,RUN.red)-BAGS.length); for (let k=0;k<nb;k++) spawnBag(); } for (let k=0;k<3;k++) spawnPolice('van'); }
     RUN.ns-=dt;
     const maxPol = Math.round((IS_MOBILE?WANT.maxM:WANT.max)[RUN.lvl-1]*(two?1.5:1));   // a dos jugadores, más policía
-    const rampOn = active.some(p=>!p.ps.over && !p.ps.foot && MODELS[p.obj.model].ramp), mils = POL.filter(e=>e.kind==='mil' && !e.wrecked).length;
+    const rampOn = active.some(p=>!p.ps.over && !p.ps.foot && MODELS[p.obj.model].ramp), mils = POL.filter(e=>e.kind==='mil' && !e.wrecked).length, tanks = POL.filter(e=>e.kind==='tank' && !e.wrecked).length;
     if (RUN.ns<=0){ RUN.ns=WANT.iv[RUN.lvl-1]*(two?0.75:1);
-      if (rampOn && RUN.lvl>=MIL_LVL && mils<RUN.lvl-MIL_LVL+1){ spawnPolice('mil'); SFX.warn(); for (const p of alive()) toastP(p,'¡Blindado militar con torreta!','bad',2); }
+      if (rampOn && RUN.lvl>=5 && tanks<Math.min(3,1+RUN.red)){ spawnPolice('tank'); SFX.warn(); for (const p of alive()) toastP(p,'¡TANQUE! Cada cañonazo quita 5 de vida','bad',2.4); }
+      else if (rampOn && RUN.lvl>=MIL_LVL && mils<RUN.lvl-MIL_LVL+1){ spawnPolice('mil'); SFX.warn(); for (const p of alive()) toastP(p,'¡Blindado militar con torreta!','bad',2); }
       else if (POL.filter(e=>!e.wrecked).length<maxPol){ let kind='patrol';
         if (RUN.t>=300){ const r=Math.random(), vans=POL.filter(e=>e.kind==='van').length; kind = r<0.35 ? 'suv' : (r<0.55 && vans<3) ? 'van' : 'patrol'; }
         spawnPolice(kind); for (const p of alive()) toastP(p, kind==='suv'?'¡Todoterreno policial!':kind==='van'?'¡Furgón blindado!':'Refuerzos en camino', kind==='patrol'?'':'bad', 1.6); } }
@@ -3414,7 +3439,7 @@ function enterVehicle(ent){
       if (ent.out) ent.out.car=null; const thrown = !ent.out && !ent.empty ? spawnCop(ent,'push') : null;   // saca al policía a empujones
       incog = !hasWitness(ent, thrown); at = {x:PED.x, z:PED.z};
       const maxH = POL_HP[ent.kind];
-      ent.vmax = ent.kind==='van'?60 : ent.kind==='mil'?40 : 20; ent.vhp=Math.max(1, Math.round(ent.vmax*ent.hp/maxH));   // vida del coche robado según los golpes que ya lleve (el furgón blindado, 60)
+      ent.vmax = ent.kind==='van'?60 : ent.kind==='tank'?80 : ent.kind==='mil'?40 : 20; ent.vhp=Math.max(1, Math.round(ent.vmax*ent.hp/maxH));   // vida del coche robado según los golpes que ya lleve (el furgón blindado, 60)
       POL.splice(POL.indexOf(ent),1); ent.lights[0].emissiveIntensity=0.2; ent.lights[1].emissiveIntensity=0.2;
     } else PARKED.splice(PARKED.indexOf(ent),1);
     PARKED.push({obj:p.obj, car:p.car, inp:{thr:0,brk:1,steer:0,hb:false}, wrecked:p.wrecked, hit:0, dmg:0, dmgX:0, dmgZ:0, scratchT:0, id:'parked', vhp:PS.hp, vmax:PS.maxHp});   // cada coche guarda su vida
@@ -3502,15 +3527,57 @@ function pedShoot(p){
     else toastP(p,'Impacto','good',0.6); }
 }
 function footHud(){   // mira, balas y avisos del jugador 1 (el del ratón)
-  const p=players[0], s=p.ps, d=p.ped, show=policeMode && s.foot && !d.dead && !s.over && !IS_MOBILE;
-  document.body.classList.toggle('armed', show && d.gun); document.body.classList.toggle('aiming', show && d.aim);
+  const p=players[0], s=p.ps, d=p.ped, show=policeMode && s.foot && !d.dead && !s.over && !IS_MOBILE, rg=j1ramp();
+  const now=RG.ht*1000, mode = show ? 'foot' : rg ? 'ramp' : '';   // el aviso de "haz clic" solo sale los primeros 10 s
+  if (mode!==RG.hm){ RG.hm=mode; RG.hint0=now; }
+  const fresh = now-RG.hint0 < 10000;
+  document.body.classList.toggle('armed', show && d.gun); document.body.classList.toggle('gunner', rg && RG.on); document.body.classList.toggle('aiming', show && d.aim);
   if (show && d.gun){ const t='●'.repeat(d.ammo)+'○'.repeat(5-d.ammo); if ($('ammo').dataset.t!==t){ $('ammo').dataset.t=t; $('ammoPips').textContent=t; } }
   let hint='';
-  if (show && !d.trans && !d.roll){ const pc=CUR; bindP(p); const k=lootable(); bindP(pc); if (k && (!d.gun || d.ammo<5)) hint='E · Coger la pistola'; else if (document.pointerLockElement!==renderer.domElement && !paused) hint='Haz clic para mirar con el ratón'; }
+  if (show && !d.trans && !d.roll){ const pc=CUR; bindP(p); const k=lootable(); bindP(pc); if (k && (!d.gun || d.ammo<5)) hint='E · Coger la pistola'; else if (document.pointerLockElement!==renderer.domElement && !paused && fresh) hint='Haz clic para mirar con el ratón'; }
+  if (rg && !paused && fresh) hint = RG.on ? 'Clic: disparar · Esc: dejar de apuntar' : 'Haz clic para apuntar con la torreta';
   const h=$('footHint'); if (h.textContent!==hint){ h.textContent=hint; h.hidden=!hint; }
+}
+const RG = {yaw:0, pitch:0.05, on:false, fire:false, cd:0, hint0:0, ht:0};   // torreta de La Rampa: ángulo respecto al coche, disparo pedido, recarga
+const j1ramp = () => { const p=players[0], s=p.ps; return policeMode && !IS_MOBILE && !s.foot && !s.over && !s.garIn && !p.wrecked && !!MODELS[p.obj.model].ramp; };
+function rampGun(dt){   // gira la torreta y dispara; la bala va justo a la mira y quita un golpe
+  const p=players[0], tur=p.obj.g.userData.tur; RG.on = j1ramp() && document.pointerLockElement===renderer.domElement && !paused;
+  RG.cd=Math.max(0,RG.cd-dt); RG.ht+=dt;   // RG.ht: reloj de juego para los avisos
+  if (tur){ const ty=RG.on?RG.yaw:0; tur.rotation.y += angDiff(tur.rotation.y, ty)*Math.min(1,dt*18); }
+  if (RG.fire){ RG.fire=false; if (RG.on && RG.cd<=0) rampShoot(p); }
+}
+function rampShoot(p){
+  const cam=p.camera, o=cam.position, d=cam.getWorldDirection(_v2), c=p.car;
+  let t=Math.max(1, Math.hypot(c.x-o.x,c.z-o.z)+1), x=0, y=0, z=0, hit=null, cop=null, what='air';
+  for (; t<170; t+=0.25){ x=o.x+d.x*t; y=o.y+d.y*t; z=o.z+d.z*t;
+    if (y<=0.02){ what='ground'; break; } if (inBlock(x,z)){ what='wall'; break; }
+    for (const k of COPS) if (k.st!=='dead' && y<1.85 && Math.hypot(x-k.x,z-k.z)<0.35){ cop=k; break; } if (cop){ what='cop'; break; }
+    for (const e of POL) if (!e.wrecked && !e.air && y<(e.kind==='tank'||e.kind==='van'?2.6:1.9) && touchCar(e.car,x,z,0)){ hit=e; break; } if (hit){ what='car'; break; }
+    if (y<1.3 && PARKED.some(q=>touchCar(q.car,x,z,0))){ what='parked'; break; } }
+  const mz=p.obj.g.userData.muzzle; p.obj.g.updateMatrixWorld(true); mz.getWorldPosition(_v1);
+  tracer(_v1.x,_v1.y,_v1.z, x,y,z);
+  for (let i=0;i<3;i++) spawn(FIRE,{x:_v1.x,y:_v1.y,z:_v1.z,vx:d.x*4,vy:d.y*4,vz:d.z*4,life:0.07,s0:0.5,s1:0.15,a:1,c0:0xfff0b0,c1:0xff9a30});
+  if (what!=='air') spawn(SMOKE,{x,y:Math.max(0.05,y),z,vx:-d.x*0.6,vy:0.5,vz:-d.z*0.6,life:0.5,s0:0.2,s1:0.8,a:0.5,c0:0x8a8580,c1:0xb5b0a8});
+  SFX.shot(c.x,c.z); RG.cd=0.3; p.hit=Math.max(p.hit,0.08);
+  if (hit){ SFX.impactAt(x,z,0.5); for (let i=0;i<5;i++) spawn(FIRE,{x,y,z,vx:rnd(-3,3),vy:rnd(1,4),vz:rnd(-3,3),life:0.15,s0:0.4,s1:0.1,a:1,c0:0xfff0b0,c1:0xff7a20}); bindP(p); copHurt(p, hit); }
+  if (cop){ copDie(cop, d.x*5, d.z*5); toastP(p,'¡Policía abatido!','good',1); }
+}
+function gunCam(p, dt){   // cámara detrás de la torreta, mirando adonde apuntas
+  const c=p.car, cam=p.camera, yaw=c.th+RG.yaw, pt=RG.pitch, cp=Math.cos(pt);
+  const dx=Math.sin(yaw)*cp, dy=Math.sin(pt), dz=Math.cos(yaw)*cp, py=c.y+2.6;
+  let dist=5.2; while (dist>1 && inBlock(c.x-dx*dist, c.z-dz*dist)) dist-=0.25;
+  _v1.set(c.x-dx*dist, Math.max(0.5, py-dy*dist), c.z-dz*dist);
+  p.cam.pos.lerp(_v1, 1-Math.exp(-20*dt)); cam.position.copy(p.cam.pos);
+  if (p.hit>0.01 && !reduceMotion){ cam.position.x+=rnd(-1,1)*p.hit*0.25; cam.position.y+=rnd(-1,1)*p.hit*0.15; } p.hit=Math.max(0,p.hit-dt*2.5);
+  cam.lookAt(c.x+dx*40, c.y+1+dy*40, c.z+dz*40); p.cam.yaw=yaw;   // la mira, a la altura de los coches a unos 40 m
+  if (Math.abs(cam.fov-FOV0)>0.05){ cam.fov=FOV0; cam.updateProjectionMatrix(); }
 }
 const j1foot = () => { const s=players[0].ps; return policeMode && s.foot && !s.over && !players[0].ped.dead; };
 addEventListener('mousedown', e=>{
+  if (!IS_MOBILE && !paused && j1ramp()){
+    if (e.target.closest && e.target.closest('button,.ovl,#driftPanel')) return;
+    if (document.pointerLockElement!==renderer.domElement){ try{ renderer.domElement.requestPointerLock(); }catch(_){} RG.yaw=0; RG.pitch=0.05; return; }
+    if (e.button===0) RG.fire=true; return; }
   if (IS_MOBILE || paused || !j1foot()) return;
   if (e.target.closest && e.target.closest('button,.ovl,#driftPanel')) return;
   if (document.pointerLockElement!==renderer.domElement){ try{ renderer.domElement.requestPointerLock(); }catch(_){} if (e.button!==2) return; }
@@ -3518,12 +3585,13 @@ addEventListener('mousedown', e=>{
 });
 addEventListener('mouseup', e=>{ if (e.button===2) MOUSE.r=false; });
 addEventListener('mousemove', e=>{
+  if (document.pointerLockElement===renderer.domElement && j1ramp() && !paused){ RG.yaw -= e.movementX*0.0024; RG.pitch=clamp(RG.pitch - e.movementY*0.0024, -0.3, 0.55); return; }
   if (document.pointerLockElement!==renderer.domElement || !j1foot() || paused) return;
   const p=players[0], s=p.ped.aim?0.0013:0.0024;
   p.cam.yaw -= e.movementX*s; p.cam.pitch = clamp((p.cam.pitch||0) - e.movementY*s, -0.55, 0.7);
 });
 addEventListener('contextmenu', e=>{ if (policeMode && players[0].ps.foot) e.preventDefault(); });
-document.addEventListener('pointerlockchange', ()=>{ if (!document.pointerLockElement){ MOUSE.r=false; if (j1foot() && !paused && !RUN.over) pause(); } });
+document.addEventListener('pointerlockchange', ()=>{ if (!document.pointerLockElement){ MOUSE.r=false; RG.on=false; if (j1foot() && !paused && !RUN.over) pause(); } });
 function releaseMouse(){ MOUSE.r=false; if (document.pointerLockElement) try{ document.exitPointerLock(); }catch(_){} }
 function placePerson(B,o){ B.g.position.set(o.x,0,o.z); B.g.rotation.y=o.th; }
 // --- policías a pie ---
@@ -3604,29 +3672,31 @@ function copShoot(k, tgt, d){
   if (PS.foot){ PED.hp=Math.max(0,PED.hp-1); toastP(CUR,'−1 vida','bad',0.8); if (PED.hp<=0) pedDie('disparos', sn*3, cs*3); }
   else { PS.hp=Math.max(0,PS.hp-1); toastP(CUR,'−1 vida','bad',0.8); if (PS.hp<=0) caught('vida'); }
 }
-const MIL_LVL=3, MIL_RANGE=140;   // estrella desde la que salen y alcance de la torreta (m)
+const MIL_LVL=3, MIL_RANGE=140, MIL_MAX=8;   // MIL_MAX: blindados a la vez como mucho
+const GUN = {mil:{dmg:1, cd:[1.3,2.1], rot:2.5, len:1.9}, tank:{dmg:5, cd:[4,5.5], rot:1.1, len:4.4}};   // daño por impacto, segundos entre disparos, giro (rad/s), largo del cañón   // estrella desde la que salen y alcance de la torreta (m)
 function turretUpdate(dt){
-  for (const e of POL){ const o=e.obj; if (e.kind!=='mil' || !o.tur || e.wrecked || e.air || e.empty || e.out) continue;
+  for (const e of POL){ const o=e.obj; if (!GUN[e.kind] || !o.tur || e.wrecked || e.air || e.empty || e.out) continue;
     const c=e.car, p=nearestTarget(c.x,c.z); e.shotT-=dt;
     let want=0, aim=false, d=1e9, T=null;
     if (p && !RUN.over){ T=(p.ps.foot ? p.ped : p.car); d=Math.hypot(T.x-c.x,T.z-c.z);
       if (d<MIL_RANGE && los(c.x,c.z,T.x,T.z)){ aim=true; want=Math.atan2(T.x-c.x,T.z-c.z)-c.th; } }
-    if (aim){ let da=want-e.turA; da=Math.atan2(Math.sin(da),Math.cos(da)); e.turA+=clamp(da,-2.5*dt,2.5*dt);   // gira la torreta (2,5 rad/s)
-      if (e.shotT<=0 && Math.abs(da)<0.15){ e.shotT=rnd(1.3,2.1); bindP(p); milShoot(e, T, d); bindP(players[0]); } }
+    if (aim){ let da=want-e.turA; da=Math.atan2(Math.sin(da),Math.cos(da)); const G=GUN[e.kind]; e.turA+=clamp(da,-G.rot*dt,G.rot*dt);   // gira la torreta
+      if (e.shotT<=0 && Math.abs(da)<0.15){ e.shotT=rnd(G.cd[0],G.cd[1]); bindP(p); milShoot(e, T, d); bindP(players[0]); } }
     else e.shotT=Math.max(e.shotT,0.6);
     o.tur.rotation.y=e.turA; }
 }
 function milShoot(e, tgt, d){   // ametralladora del blindado: a diferencia de la pistola, sí atraviesa los coches
-  const c=e.car, a=c.th+e.turA, sn=Math.sin(a), cs=Math.cos(a), gx=c.x+sn*1.9, gz=c.z+cs*1.9, gy=e.obj.turY+0.3;
+  const G=GUN[e.kind], big=e.kind==='tank', c=e.car, a=c.th+e.turA, sn=Math.sin(a), cs=Math.cos(a), gx=c.x+sn*G.len, gz=c.z+cs*G.len, gy=e.obj.turY+(big?0.4:0.3);
   let acc=clamp(0.85-d/200, 0.3, 0.85); const v=Math.hypot(tgt.vx||0,tgt.vz||0); if (v>25) acc*=0.55; else if (v>10) acc*=0.75;
   const hit=Math.random()<acc, ox=hit?rnd(-0.3,0.3):rnd(-2.5,2.5), oz=hit?rnd(-0.3,0.3):rnd(-2.5,2.5);
   tracer(gx,gy,gz, tgt.x+ox, hit?1:rnd(0.3,2.5), tgt.z+oz);
-  for (let i=0;i<4;i++) spawn(FIRE,{x:gx,y:gy,z:gz,vx:sn*rnd(2,5),vy:rnd(-.5,.5),vz:cs*rnd(2,5),life:0.08,s0:0.6,s1:0.2,a:1,c0:0xfff0b0,c1:0xff9a30});
-  SFX.shot(gx,gz); SFX.impactAt(gx,gz,0.25);
+  for (let i=0;i<(big?14:4);i++) spawn(FIRE,{x:gx,y:gy,z:gz,vx:sn*rnd(2,big?12:5),vy:rnd(-.5,big?2:.5),vz:cs*rnd(2,big?12:5),life:big?0.2:0.08,s0:big?1.6:0.6,s1:0.2,a:1,c0:0xfff0b0,c1:0xff9a30});
+  SFX.shot(gx,gz); SFX.impactAt(gx,gz,big?1:0.25);
+  if (big){ const ix=tgt.x+ox, iz=tgt.z+oz; SFX.explosion(ix,iz); for (let i=0;i<16*PQ;i++) spawn(FIRE,{x:ix+rnd(-1,1),y:rnd(0.2,1.2),z:iz+rnd(-1,1),vx:rnd(-5,5),vy:rnd(2,7),vz:rnd(-5,5),life:rnd(0.3,0.7),s0:1.2,s1:3.5,a:1,c0:0xffd27a,c1:0xff3000,drag:0.9}); }
   if (!hit) return;
-  PS.flash=1; SFX.hurt(); SFX.impactAt(tgt.x,tgt.z,0.4); CUR.hit=Math.max(CUR.hit||0,0.25);
-  if (PS.foot){ PED.hp=Math.max(0,PED.hp-1); toastP(CUR,'−1 vida','bad',0.8); if (PED.hp<=0) pedDie('disparos', sn*3, cs*3); }
-  else { PS.hp=Math.max(0,PS.hp-1); toastP(CUR,'−1 vida · torreta','bad',0.8); if (PS.hp<=0) caught('vida'); }
+  PS.flash=1; SFX.hurt(); SFX.impactAt(tgt.x,tgt.z,0.4); CUR.hit=Math.max(CUR.hit||0,big?0.8:0.25);
+  if (PS.foot){ PED.hp=Math.max(0,PED.hp-G.dmg); toastP(CUR,'−'+G.dmg+' vida','bad',0.8); if (PED.hp<=0) pedDie('disparos', sn*3, cs*3); }
+  else { PS.hp=Math.max(0,PS.hp-G.dmg); toastP(CUR,'−'+G.dmg+' vida · '+(big?'cañonazo':'torreta'),'bad',big?1.4:0.8); if (PS.hp<=0) caught('vida'); }
 }
 function allCars(){ const out=[]; for (const p of active) out.push(p.car); for (const e of POL) if (!e.air) out.push(e.car); for (const e of PARKED) out.push(e.car); return out; }
 // atropellos y empujones entre personas y coches
@@ -3651,7 +3721,7 @@ function copsExit(dt){
     if (S.foot){ e.exitT = (Math.hypot(D.x-c.x,D.z-c.z)<24 && v<2.5) ? (e.exitT||0)+dt : 0;
       if (e.exitT>1.0 && !(D.trans && D.trans.ent===e)) spawnCop(e,'out'); continue; }   // tarda ~1 s en bajarse: da tiempo a robarle el coche
     const near=Math.hypot(p.car.x-c.x,p.car.z-c.z)<35; e.stopT = (v<1 && near) ? (e.stopT||0)+dt : Math.min(0,(e.stopT||0)+dt);
-    if (e.stopT>2.5 && e.kind!=='van' && e.kind!=='mil'){ e.stopT=-8; spawnCop(e,'out'); }
+    if (e.stopT>2.5 && e.kind!=='van' && e.kind!=='mil' && e.kind!=='tank'){ e.stopT=-8; spawnCop(e,'out'); }
   }
 }
 function parkedUpdate(h){
