@@ -2643,7 +2643,8 @@ MODELS.push(Object.assign({}, MODELS.find(m=>m.police==='van'), {name:'Tanque', 
 MODELS.push(Object.assign({}, MODELS.find(m=>m.police==='suv'), {name:'Blindado militar', police:'mil', wr:0.46, tireW:[1.35,1.35], exhaust:[[-.6,.55]]}));
 // ---------- Policía ----------
 function policeIdx(kind){ return MODELS.findIndex(m=>m.police===kind); }
-const POL_HP = {patrol:2, suv:3, van:4, mil:4, tank:6};   // golpes para destruir cada tipo
+const POL_HP = {patrol:20, suv:30, van:40, mil:40, tank:70};   // vida de cada tipo: un choque quita 10 (HIT_DMG) y cada bala, 1
+const HIT_DMG = 10;
 const POL_NAME = {patrol:'¡Patrulla eliminada!', suv:'¡Todoterreno eliminado!', van:'¡Furgón eliminado!', mil:'¡Blindado militar eliminado!', tank:'¡Tanque destruido!'};
 function policeLivery(o, kind){
   const g=o.pctx, W=PW, H=PH;
@@ -2735,12 +2736,12 @@ function policeExplode(e){
 }
 // La Rampa: el coche que le entra por delante sale volando por encima, da vueltas y al caer pierde un golpe
 const RAMP_G=11.8, RAMP_MIN=8, RAMP_UPSIDE=0.4;   // RAMP_UPSIDE: probabilidad de que caiga boca abajo y explote   // gravedad del vuelo y velocidad mínima de choque (m/s, unos 30 km/h) para salir lanzado
-function copHurt(p, e){   // un golpe a la policía; si era el último, explota y me rellena la vida
-  const maxH = POL_HP[e.kind]; e.hp--;
+function copHurt(p, e, dmg=HIT_DMG){   // daño a la policía (choque 10, bala 1); si se queda sin vida, explota y me rellena la mía
+  const maxH = POL_HP[e.kind]; e.hp=Math.max(0, e.hp-dmg);
   if (e.hp<=0){ policeExplode(e); p.ps.hp=p.ps.maxHp;
     if (e.kind==='mil'){ const n=Math.min(2, MIL_MAX-POL.filter(q=>q.kind==='mil' && !q.wrecked).length); for (let i=0;i<n;i++) spawnPolice('mil'); if (n>0){ SFX.warn(); setTimeout(()=>toastP(p,'¡Vienen '+(n===2?'dos':'uno')+' más!','bad',1.8), 1900); } }
     toastP(p, POL_NAME[e.kind]+' · vida al máximo','good',1.8); }
-  else toastP(p,'Golpe a la policía · '+(maxH-e.hp)+'/'+maxH,'good',1.2);
+  else toastP(p, (dmg>=HIT_DMG?'Golpe a la policía':'Impacto')+' · le quedan '+e.hp+'/'+maxH, 'good', dmg>=HIT_DMG?1.2:0.6);
 }
 function rampLaunch(e, p, closing){
   const c=e.car, m=p.car, vy=clamp(closing*0.47,6,11), T=2*vy/RAMP_G, turns=Math.max(1,Math.round(T*0.7));
@@ -2757,7 +2758,7 @@ function rampFly(e, h){
   const y=c.y, pi=c.pitch; cityCollide(e); c.y=y; c.pitch=pi;   // los edificios lo paran, pero sigue en el aire
   if (c.y>0 || a.vy>0) return;
   e.air=null; c.y=0; c.pitch=0; c.roll=0; c.vx*=0.35;
-  if (a.up){ const sp=MODELS[policeIdx(e.kind)]; c.pitch=Math.PI; c.y=Math.max(...sp.roof.map(q=>q[1]))+0.1; e.hp=1; }   // boca abajo: apoyado en el techo y el golpe lo destroza c.vz*=0.35; c.vlong=c.vlat=0; e.wp=null; SFX.impactAt(c.x,c.z,1);
+  if (a.up){ const sp=MODELS[policeIdx(e.kind)]; c.pitch=Math.PI; c.y=Math.max(...sp.roof.map(q=>q[1]))+0.1; e.hp=Math.min(e.hp,HIT_DMG); }   // boca abajo: apoyado en el techo y el golpe lo destroza c.vz*=0.35; c.vlong=c.vlat=0; e.wp=null; SFX.impactAt(c.x,c.z,1);
   for (let i=0;i<14*PQ;i++) spawn(SMOKE,{x:c.x+rnd(-1.5,1.5),y:0.3,z:c.z+rnd(-1.5,1.5),vx:rnd(-4,4),vy:rnd(0.5,2.5),vz:rnd(-4,4),life:rnd(0.8,1.6),s0:1,s1:4,a:0.5,c0:0x8a8580,drag:0.95,fadeIn:true});
   copHurt(a.p, e);
 }
@@ -3012,7 +3013,7 @@ function policeFrame(dt){
       for (const e of POL){ if (e.air) continue;
         const vE=e.car.vx*Math.sin(e.car.th)+e.car.vz*Math.cos(e.car.th);   // velocidad hacia delante de la policía ANTES del choque
         const vP=c.vx*Math.sin(c.th)+c.vz*Math.cos(c.th);                     // mi velocidad hacia delante ANTES del choque
-        const r=collideCars(p, e, isRamp && !PS.foot && !PS.over && !e.wrecked ? (nx,nz,vrel)=>{ if (e.touchT<=0 && nx*Math.sin(c.th)+nz*Math.cos(c.th)>0.55 && -vrel>RAMP_MIN){ rampLaunch(e,p,-vrel); return true; } return false; } : undefined);
+        const r=collideCars(p, e, isRamp && !PS.foot && !PS.over && !e.wrecked ? (nx,nz,vrel)=>{ if (e.kind!=='tank' && e.touchT<=0 && nx*Math.sin(c.th)+nz*Math.cos(c.th)>0.55 && -vrel>RAMP_MIN){ rampLaunch(e,p,-vrel); return true; } return false; } : undefined);
         if (r && e.wrecked) continue;
         if (r){ e.touchT=0.3; e.touchP=p; revealIncog(p);
           // golpe con el morro de la policía: la normal del choque apunta a lo largo de su eje (sea cual sea la zona de mi coche que reciba el golpe)
@@ -3516,12 +3517,14 @@ function pedShoot(p){
     if (hit){ what='cop'; break; }
     if (y<1.3 && cars.some(c=>touchCar(c,x,z,0))){ what='car'; break; }
   }
+  const polHit = what==='car' ? POL.find(e=>!e.wrecked && !e.air && touchCar(e.car,x,z,0)) : null;
   const m=PED.obj.gun.userData.muzzle; PED.obj.g.updateMatrixWorld(true); m.getWorldPosition(_v1);
   tracer(_v1.x,_v1.y,_v1.z, x,y,z);
   spawn(FIRE,{x:_v1.x,y:_v1.y,z:_v1.z,vx:d.x*3,vy:d.y*3,vz:d.z*3,life:0.06,s0:0.32,s1:0.12,a:1,c0:0xfff0b0,c1:0xff9a30});
   if (what!=='air' && what!=='cop') spawn(SMOKE,{x,y:Math.max(0.05,y),z,vx:-d.x*0.6,vy:0.5,vz:-d.z*0.6,life:0.5,s0:0.15,s1:0.6,a:0.5,c0:0x8a8580,c1:0xb5b0a8});
   SFX.shot(PED.x,PED.z);
   PED.ammo--; PED.fireT=0.3; p.cam.pitch=clamp((p.cam.pitch||0)+0.03,-0.55,0.7); PED.obj.kick=0.12;
+  if (polHit){ SFX.impactAt(x,z,0.35); copHurt(p, polHit, 1); }
   if (hit){ const head = y>1.55; hit.hp = head ? 0 : (hit.hp??2)-1; SFX.impactAt(hit.x,hit.z,0.35);
     if (hit.hp<=0){ copDie(hit, d.x*5, d.z*5); toastP(p, head?'¡Policía abatido! · a la cabeza':'¡Policía abatido!','good',1.2); }
     else toastP(p,'Impacto','good',0.6); }
@@ -3559,7 +3562,7 @@ function rampShoot(p){
   for (let i=0;i<3;i++) spawn(FIRE,{x:_v1.x,y:_v1.y,z:_v1.z,vx:d.x*4,vy:d.y*4,vz:d.z*4,life:0.07,s0:0.5,s1:0.15,a:1,c0:0xfff0b0,c1:0xff9a30});
   if (what!=='air') spawn(SMOKE,{x,y:Math.max(0.05,y),z,vx:-d.x*0.6,vy:0.5,vz:-d.z*0.6,life:0.5,s0:0.2,s1:0.8,a:0.5,c0:0x8a8580,c1:0xb5b0a8});
   SFX.shot(c.x,c.z); RG.cd=0.3; p.hit=Math.max(p.hit,0.08);
-  if (hit){ SFX.impactAt(x,z,0.5); for (let i=0;i<5;i++) spawn(FIRE,{x,y,z,vx:rnd(-3,3),vy:rnd(1,4),vz:rnd(-3,3),life:0.15,s0:0.4,s1:0.1,a:1,c0:0xfff0b0,c1:0xff7a20}); bindP(p); copHurt(p, hit); }
+  if (hit){ SFX.impactAt(x,z,0.5); for (let i=0;i<5;i++) spawn(FIRE,{x,y,z,vx:rnd(-3,3),vy:rnd(1,4),vz:rnd(-3,3),life:0.15,s0:0.4,s1:0.1,a:1,c0:0xfff0b0,c1:0xff7a20}); bindP(p); copHurt(p, hit, 1); }
   if (cop){ copDie(cop, d.x*5, d.z*5); toastP(p,'¡Policía abatido!','good',1); }
 }
 function gunCam(p, dt){   // cámara detrás de la torreta, mirando adonde apuntas
