@@ -1406,6 +1406,7 @@ function declareWar(a,b,byPlayer){
   addLog(byPlayer?`Por orden divina, ${a.name} declara la guerra a ${b.name}.`:`¡${a.name} ha declarado la guerra a ${b.name}!`);
   return true;
 }
+function payPeace(payer,other){const amt=Math.floor((payer.gold||0)*0.3);payer.gold-=amt;if(other)other.gold=(other.gold||0)+amt;return amt}
 function makePeace(a,b,msg){
   if(a)a.war=null;if(b)b.war=null;
   if(msg)addLog(msg);
@@ -1424,7 +1425,7 @@ function dailyWars(){
     if(!e){n.war=null;continue}
     if(n.id>e.id)continue;
     if(S.warMode==='off'){makePeace(n,e,`Por voluntad divina, ${n.name} y ${e.name} han firmado la paz.`);continue}
-    if(S.warMode==='auto'&&!n.war.manual&&tick>n.war.until){makePeace(n,e,`${n.name} y ${e.name} han firmado la paz.`);continue}
+    if(S.warMode==='auto'&&!n.war.manual&&tick>n.war.until){const pay=nationSoldiers(n)<=nationSoldiers(e)?n:e,oth=pay===n?e:n,amt=payPeace(pay,oth);makePeace(n,e,`${n.name} y ${e.name} han firmado la paz: ${pay.name} paga ${amt} de oro (el 30 % de su oro) a ${oth.name}.`);continue}
     if(!n.war.manual&&nationSoldiers(n)===0&&nationSoldiers(e)===0&&tick-n.war.start>DAY*2){makePeace(n,e,`${n.name} y ${e.name} se han quedado sin ejércitos y firman la paz.`);continue}
   }
   if(S.warMode!=='auto')return;
@@ -2559,7 +2560,7 @@ function renderCtl(v,n){
     h+=`<div class="lbl">Reglas para toda la nación ${esc(n.name)}</div>`;
     h+=`<button class="px wide${n.noColonies?' on':''}" type="button" data-act="nocol">${n.noColonies?'No funda poblados nuevos (toca para permitirlo)':'Puede fundar poblados nuevos (toca para prohibirlo)'}</button>`;
     h+=`<button class="px wide${n.noIndep?' on':''}" type="button" data-act="noind">${n.noIndep?'No se puede dividir (toca para permitirlo)':'Sus poblados pueden independizarse (toca para prohibirlo)'}</button>`;
-    if(n.war){const e=nations.get(n.war.enemy);h+=`<button class="px wide warn" type="button" data-act="peace">Firmar la paz con ${esc(e?e.name:'el enemigo')}</button>`}
+    if(n.war){const e=nations.get(n.war.enemy);h+=`<button class="px wide warn" type="button" data-act="peace">Firmar la paz con ${esc(e?e.name:'el enemigo')} pagando el 30 % del oro de ${esc(n.name)}</button>`}
     else if(S.warMode==='off'){h+=`<div class="lbl">Las guerras están prohibidas en Ajustes.</div>`}
     else if(!pickWar){h+=`<button class="px wide warn" type="button" data-act="pick">Declarar la guerra…</button>`}
     else{
@@ -2588,7 +2589,7 @@ cardCtl.addEventListener('click',e=>{
   else if(b.dataset.war){const e2=nations.get(+b.dataset.war);if(n&&e2&&declareWar(n,e2,true)){pickWar=false;census();periodic()}}
   else if(b.dataset.act==='pick')pickWar=true;
   else if(b.dataset.act==='unpick')pickWar=false;
-  else if(b.dataset.act==='peace'&&n&&n.war){const e2=nations.get(n.war.enemy);makePeace(n,e2,`Por orden divina, ${n.name} y ${e2?e2.name:'su enemigo'} han firmado la paz.`)}
+  else if(b.dataset.act==='peace'&&n&&n.war){const e2=nations.get(n.war.enemy);const amt=payPeace(n,e2);makePeace(n,e2,`Por orden divina, ${n.name} firma la paz con ${e2?e2.name:'su enemigo'} y le paga ${amt} de oro (el 30 % de su oro).`)}
   else if(b.dataset.act==='nocol'&&n){n.noColonies=!n.noColonies;addLog(n.noColonies?`${n.name} ya no fundará poblados nuevos.`:`${n.name} vuelve a poder fundar poblados nuevos.`)}
   else if(b.dataset.act==='noind'&&n){n.noIndep=!n.noIndep;addLog(n.noIndep?`${n.name} no se dividirá: sus poblados no pueden independizarse.`:`Los poblados de ${n.name} vuelven a poder independizarse.`)}
   else if(b.dataset.act==='walls'){
@@ -2851,7 +2852,7 @@ resize();renderTabs();renderTools();generate();
 requestAnimationFrame(frame);
 openMenu();
 
-window.__mw={S,get people(){return people},get animals(){return animals},get villages(){return villages},get nations(){return nations},get tick(){return tick},step,generate,log,cam,view,CATS,applyPower,declareWar,makePeace,planWalls,encodeWorld,decodeWorld,saveNow,Store,newNation,orderClaim,get missions(){return missions},showAsk,councilQuestions,choosePath,markVillage,updateTerritory,orderAttack,get W(){return W},regionAt,setTerrain,spawnGroup,adoptOrphans,placeBuilding,get boats(){return boats},get cur(){return cur},set cur(v){cur=v},Save};
+window.__mw={S,get people(){return people},get animals(){return animals},get villages(){return villages},get nations(){return nations},get tick(){return tick},step,generate,log,cam,view,CATS,applyPower,declareWar,makePeace,planWalls,encodeWorld,decodeWorld,saveNow,Store,newNation,payPeace,orderClaim,get missions(){return missions},showAsk,councilQuestions,choosePath,markVillage,updateTerritory,orderAttack,get W(){return W},regionAt,setTerrain,spawnGroup,adoptOrphans,placeBuilding,get boats(){return boats},get cur(){return cur},set cur(v){cur=v},Save};
 })();
 </script>
 </body></html>
