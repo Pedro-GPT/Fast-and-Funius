@@ -207,6 +207,7 @@ button.chip{box-shadow:0 2px 0 var(--shadow)}
         <label class="check"><input type="checkbox" id="optColonies"> Fundar poblados nuevos al crecer</label>
         <label class="check"><input type="checkbox" id="optIndep"> Independencias (un poblado lejano puede formar su propia nación)</label>
         <label class="check"><input type="checkbox" id="optBorders"> Mostrar territorios de colores</label>
+        <label class="check"><input type="checkbox" id="optCapitals"> Ver solo el nombre de las capitales</label>
         <label class="check"><input type="checkbox" id="optAsk"> Preguntarme en qué se dedican las naciones (desde los 200 habitantes)</label>
         <div class="field"><label for="maxPop">Población máxima</label><input type="range" id="maxPop" min="100" max="3000" step="100"><output id="maxPopOut"></output></div>
       </section>
@@ -332,7 +333,7 @@ const WAR_NOTES={auto:'Las naciones declaran guerras y hacen las paces solas. T�
 /* ════════════ Ajustes ════════════ */
 const DEFAULTS={seed:'valle-azul',size:'mediano',island:true,startPeople:12,startAnimals:true,
   food:100,wood:100,stone:100,ore:100,regen:100,night:true,oldAge:true,
-  births:true,colonies:true,independence:true,borders:true,ask:true,warMode:'auto',randomCat:false,catFreq:100,maxPop:1500};
+  births:true,colonies:true,independence:true,borders:true,ask:true,onlyCapitals:false,warMode:'auto',randomCat:false,catFreq:100,maxPop:1500};
 const S={...DEFAULTS};
 
 /* ════════════ Aleatorio y ruido ════════════ */
@@ -2348,6 +2349,7 @@ function draw(){
     const sx=ox+(v.cx+.5)*U,sy=oy+v.cy*U-Math.max(14,U*2.2);
     if(sx<-80||sx>w+80||sy<-20||sy>h+20)continue;
     const n=nat(v),capital=n&&n.capital===v.id;
+    if(S.onlyCapitals&&!capital)continue;
     const label=z<0.5?v.name:`${capital?'♦ ':''}${v.name} · ${STAGES[v.stage]} · ${v.pop}${n&&n.war?' · en guerra':''}`;
     const tw=ctx.measureText(label).width+14;
     ctx.fillStyle='rgba(15,21,32,.85)';ctx.fillRect(Math.round(sx-tw/2),Math.round(sy-9),Math.round(tw),18);
@@ -2595,7 +2597,7 @@ function buildSettings(){
   $('#warNote').textContent=WAR_NOTES[S.warMode];
   const mp=$('#maxPop');mp.value=S.maxPop;$('#maxPopOut').textContent=S.maxPop;mp.oninput=()=>{S.maxPop=+mp.value;$('#maxPopOut').textContent=S.maxPop};
   const cf=$('#catFreq');cf.value=S.catFreq;const cfo=()=>{$('#catFreqOut').textContent=`${(S.catFreq/100).toLocaleString('es-ES',{maximumFractionDigits:1})} al año`};cfo();cf.oninput=()=>{S.catFreq=+cf.value;cfo()};
-  const chk={optNight:'night',optAge:'oldAge',optBirths:'births',optColonies:'colonies',optIndep:'independence',optBorders:'borders',optAsk:'ask',optRandCat:'randomCat'};
+  const chk={optNight:'night',optAge:'oldAge',optBirths:'births',optColonies:'colonies',optIndep:'independence',optBorders:'borders',optCapitals:'onlyCapitals',optAsk:'ask',optRandCat:'randomCat'};
   for(const [id,k] of Object.entries(chk)){const el=$('#'+id);el.checked=S[k];el.onchange=()=>{S[k]=el.checked}}
   renderTotals();
 }
