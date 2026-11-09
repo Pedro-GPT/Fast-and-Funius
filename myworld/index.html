@@ -331,7 +331,7 @@ let nextId=1,nextAid=1,nextVid=1,nextNid=1,tick=0,speed=1;
 let selected=null,follow=false,pickWar=false;
 let capF=[],capW=[];
 let tornados=[],effects=[],lavaMap=new Map(),fireSet=new Set(),droughts=[],shakeT=0,boats=[];
-let milestone=0,atkSel=null,atkCount=1,aim=null;
+let milestone=0,atkSel=null,atkCount=1,aim=null,fishers=[];
 const portJobs=new Set();
 const log=[];
 let cur=null; // mundo guardado actual {id,name}
@@ -355,7 +355,7 @@ function allocWorld(n){
 function resetState(){
   people=[];animals=[];villages=new Map();nations=new Map();nextId=1;nextAid=1;nextVid=1;nextNid=1;tick=0;
   selected=null;follow=false;log.length=0;milestone=0;pickWar=false;
-  tornados=[];effects=[];lavaMap=new Map();fireSet=new Set();droughts=[];shakeT=0;boats=[];atkSel=null;
+  tornados=[];effects=[];lavaMap=new Map();fireSet=new Set();droughts=[];shakeT=0;boats=[];fishers=[];atkSel=null;
 }
 function generate(){
   allocWorld(SIZES[S.size].n);
@@ -584,7 +584,7 @@ function query(grid,x,y,r,fn){
 
 /* ════════════ Caminos ════════════ */
 let bfsQ=new Int32Array(9000),bfsPar=null,bfsStamp=null,curStamp=0;
-function ensureBfs(){if(!bfsPar||bfsPar.length!==N){bfsPar=new Int32Array(N);bfsStamp=new Uint32Array(N);curStamp=0}}
+function ensureBfs(){if(!bfsPar||bfsPar.length!==N){bfsPar=new Int32Array(N);bfsStamp=new Uint32Array(N);bfsQ=new Int32Array(Math.max(9000,N));curStamp=0}}
 const DIRS=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 function walkable(i){return TER[terr[i]].walk===1&&bld[i]!==B.WALL}
 function bfs(start,test,maxN){
@@ -845,7 +845,11 @@ function periodic(){
         const alive=v.members.filter(p=>p.attack===v.squad.target&&!p.dead).length;
         if(!tv||tv.nid!==n.war.enemy){endSquad(v,null)}
         else if(!alive){endSquad(v,`Los soldados de ${v.name} han caído atacando ${tv.name}.`)}
-        else if(v.squad.phase==='rally'&&tick>=v.squad.until)v.squad.phase='march';
+        else if(v.squad.phase==='rally'){
+          const sq=v.squad,rx=sq.rally%W+.5,ry=((sq.rally/W)|0)+.5;
+          let all=0,near=0;for(const q of people){if(!q.dead&&q.attack===sq.target&&squadOf(q)===sq){all++;if(Math.hypot(q.x-rx,q.y-ry)<5)near++}}
+          if(tick>=sq.until||(all&&near>=Math.ceil(all*0.85))){if(sq.phase==='rally'){sq.phase='march';addLog(`¡La tropa ya está reunida junto a ${tv.name} y ataca!`)}}
+        }
       }else if(!v.squad||!tv||tv.nid!==n.war.enemy){
         const t=(S.warMode==='auto'&&!n.war.manual)?nearestEnemyVillage(v,n.war.enemy):null;
         v.squad=t?{target:t.id,phase:'rally',until:tick+70}:null;
@@ -855,6 +859,21 @@ function periodic(){
   if(tick%60===0)updateTerritory();
 }
 function endSquad(v,msg){v.squad=null;for(const p of v.members)if(p.attack){p.attack=null;if(p.state==='march'||p.state==='rally'){p.path=null;p.state='idle'}}if(msg)addLog(msg)}
+function rallyPoint(tv,sol){
+  let mx=0,my=0;for(const p of sol){mx+=p.x;my+=p.y}
+  if(sol.length){mx/=sol.length;my/=sol.length}else{mx=tv.cx;my=tv.cy}
+  let dx=mx-tv.cx,dy=my-tv.cy;const d=Math.hypot(dx,dy)||1;dx/=d;dy/=d;
+  const R0=Math.min(d,(tv.wallR?tv.wallR+4:9));
+  for(let r=R0;r<=Math.max(R0,d);r+=1){
+    for(const a of [0,.3,-.3,.6,-.6,1,-1]){
+      const ca=Math.cos(a),sa=Math.sin(a),vx=dx*ca-dy*sa,vy=dx*sa+dy*ca;
+      const x=Math.round(tv.cx+vx*r),y=Math.round(tv.cy+vy*r);if(x<0||y<0||x>=W||y>=H)continue;
+      const i=y*W+x;if(walkable(i)&&!bld[i])return i;
+    }
+  }
+  return tileOf(sol[0]||{x:tv.cx,y:tv.cy});
+}
+function squadOf(p){if(!p.attack)return null;const v=villages.get(p.vid);return v&&v.squad&&v.squad.manual&&v.squad.target===p.attack?v.squad:null}
 function orderAttack(v,tv,count,banner){
   const n=nat(v);let tn=nat(tv);if(!n||!tn)return false;
   if(tn===n){
@@ -869,7 +888,7 @@ function orderAttack(v,tv,count,banner){
   const mine=new Set(nationVillages(n).map(o=>o.id));
   for(const p of people)if(mine.has(p.vid))p.attack=null;
   const sol=people.filter(p=>!p.dead&&p.soldier&&mine.has(p.vid)).sort((a,b)=>Math.hypot(a.x-tv.cx,a.y-tv.cy)-Math.hypot(b.x-tv.cx,b.y-tv.cy)).slice(0,count);
-  const sq={target:tv.id,phase:'rally',until:tick+50,manual:true,size:sol.length,banner:banner??tv.center};
+  const sq={target:tv.id,phase:'rally',until:tick+DAY*4,manual:true,size:sol.length,banner:banner??tv.center,rally:rallyPoint(tv,sol)};
   for(const p of sol){p.attack=tv.id;p.atBanner=false;p.path=null;p.target=null;p.state='idle';p.wait=0;const pv=villages.get(p.vid);if(pv)pv.squad=sq}
   addLog(`Por orden divina, ${sol.length} soldado${sol.length===1?'':'s'} de ${n.name} marchan a conquistar ${tv.name}.`);
   return true;
@@ -918,6 +937,7 @@ function daily(){
       if(v.pop>=min){
         const p=(0.07+Math.max(0,(v.pop-min)/180)+(v.noSite?0.35:0))*tr.colony;
         if(rnd()<p)tryColony(v);
+        else if(v.port>=0&&rnd()<0.04*tr.colony)trySeaColony(v);
       }
     }
     const n=nat(v);
@@ -1002,7 +1022,33 @@ function checkInstantConquest(){
     if(near){const fl=Math.floor(tv.food/2),wl=Math.floor(tv.wood/2);tv.food-=fl;tv.wood-=wl;v.food+=fl;v.wood+=wl;addLog(`${tv.name} se ha quedado sin soldados y se rinde.`);conquer(n,tv)}
   }
 }
+function waterLine(x0,y0,x1,y1){const n=Math.ceil(Math.hypot(x1-x0,y1-y0)*2);for(let k=0;k<=n;k++){const x=Math.floor(x0+(x1-x0)*k/n),y=Math.floor(y0+(y1-y0)*k/n);if(x<0||y<0||x>=W||y>=H||!isWater(terr[y*W+x]))return false}return true}
+function stepFishers(){
+  for(const v of villages.values()){
+    if(v.port<0||bld[v.port]!==B.PORT)continue;
+    const want=v.stage>=3?2:1;let have=0;for(const f of fishers)if(f.vid===v.id)have++;
+    if(have<want){
+      const px=v.port%W,py=(v.port/W)|0;let wt=-1;
+      for(const [dx,dy] of DIRS){const x=px+dx,y=py+dy;if(x>=0&&y>=0&&x<W&&y<H&&isWater(terr[y*W+x])){wt=y*W+x;break}}
+      if(wt>=0)fishers.push({vid:v.id,x:wt%W+.5,y:((wt/W)|0)+.5,tx:null,ty:null,wait:0,face:1});
+    }
+  }
+  for(const f of fishers){
+    const v=villages.get(f.vid);if(!v||v.port<0||bld[v.port]!==B.PORT){f.done=true;continue}
+    if(f.wait>0){f.wait--;continue}
+    if(f.tx==null){
+      const px=v.port%W+.5,py=((v.port/W)|0)+.5;
+      for(let k=0;k<12;k++){const tx=px+(rnd()*2-1)*10,ty=py+(rnd()*2-1)*10;if(tx<0||ty<0||tx>=W||ty>=H)continue;if(isWater(terr[Math.floor(ty)*W+Math.floor(tx)])&&waterLine(f.x,f.y,tx,ty)){f.tx=tx;f.ty=ty;break}}
+      if(f.tx==null){f.wait=40;continue}
+    }
+    const dx=f.tx-f.x,dy=f.ty-f.y,d=Math.hypot(dx,dy);
+    if(d<0.2){f.tx=null;f.wait=30+((rnd()*60)|0);continue}
+    const sp=Math.min(0.08,d);f.x+=dx/d*sp;f.y+=dy/d*sp;f.face=dx>=0?1:-1;
+  }
+  fishers=fishers.filter(f=>!f.done);
+}
 function stepBoats(){
+  stepFishers();
   if(!boats.length)return;
   for(const b of boats){
     const dx=b.tx-b.x,dy=b.ty-b.y,d=Math.hypot(dx,dy);
@@ -1217,12 +1263,18 @@ function tryHunt(p){
 }
 function soldierThink(p,v){
   const n=nat(v);
-  const e=findEnemy(p,n&&n.war?10:14);
+  const sqd=p.attack?squadOf(p):null;
+  const e=sqd&&sqd.phase==='rally'?null:findEnemy(p,n&&n.war?10:14);
   if(e){p.state='fight';p.target=e;p.path=null;return}
   if(!(n&&n.war)&&!p.attack&&v.center>=0&&rnd()<0.92){if(chooseWork(p,v))return}
   const attacker=n&&n.war&&v.squad&&(v.squad.manual?p.attack===v.squad.target:(p.id%5)<(v.trait==='guerrero'?4:3));
   if(attacker){
     const tv=villages.get(v.squad.target);
+    if(v.squad.phase==='rally'&&v.squad.manual&&v.squad.rally!=null){
+      const rp=v.squad.rally,rx=rp%W,ry=(rp/W)|0;
+      if(Math.hypot(rx+.5-p.x,ry+.5-p.y)>3){const path=bfs(tileOf(p),i=>Math.abs(i%W-rx)<=2&&Math.abs(((i/W)|0)-ry)<=2,N);if(path&&path.length){setPath(p,path,'rally','rally');return}}
+      p.state='rally';p.wait=10;return;
+    }
     if(v.squad.phase==='rally'){
       if(Math.hypot(v.cx+.5-p.x,v.cy+.5-p.y)>3){const path=bfs(tileOf(p),i=>Math.abs(i%W-v.cx)<=2&&Math.abs(((i/W)|0)-v.cy)<=2,9000);if(path){setPath(p,path,'rally','rally');return}}
       p.state='rally';p.wait=10;return;
@@ -1231,7 +1283,7 @@ function soldierThink(p,v){
       const bn=v.squad.banner;
       if(v.squad.manual&&bn!=null&&bn>=0&&!p.atBanner){
         if(Math.hypot(bn%W+.5-p.x,((bn/W)|0)+.5-p.y)<2.5)p.atBanner=true;
-        else{const path=bfs(tileOf(p),i=>i===bn,9000);if(path){setPath(p,path,'march','march');return}p.atBanner=true}
+        else{const path=bfs(tileOf(p),i=>i===bn,N);if(path){setPath(p,path,'march','march');return}p.atBanner=true}
       }
       const path=bfs(tileOf(p),i=>i===tv.center,9000);
       if(path){setPath(p,path,'march','march');return}
@@ -1262,8 +1314,13 @@ function decide(p){
 function hitFx(t){if(effects.length<220)effects.push({type:'hit',x:t.x,y:t.y-0.4,t:0,max:7})}
 function stepPerson(p){
   const kid=isKid(p);
-  p.hunger+=HUNGER*(kid?0.7:1);p.thirst+=THIRST*(kid?0.8:1);p.ageT++;
-  if(p.state!=='sleep')p.energy=Math.max(0,p.energy-TIRE);
+  const sqd=p.attack?squadOf(p):null,gathering=sqd&&sqd.phase==='rally';
+  p.ageT++;
+  if(gathering){if(p.lockHp==null)p.lockHp=p.hp;p.hp=Math.max(p.hp,p.lockHp);p.sick=0}else p.lockHp=null;
+  if(!gathering){
+    p.hunger+=HUNGER*(kid?0.7:1);p.thirst+=THIRST*(kid?0.8:1);
+    if(p.state!=='sleep')p.energy=Math.max(0,p.energy-TIRE);
+  }
   const v0=villages.get(p.vid),maxHp=p.soldier?soldierHp(v0):100;
   if(p.hunger<50&&p.thirst<50&&!p.sick&&p.hp>0)p.hp=Math.min(maxHp,p.hp+0.05);
   const ti=tileOf(p);
@@ -1304,6 +1361,7 @@ function stepPerson(p){
     const d=Math.hypot(t.x-p.x,t.y-p.y);
     if(d>18){p.state='idle';p.target=null;return}
     if(d<=0.95){
+      if(!t.type&&t.attack){const ts=squadOf(t);if(ts&&ts.phase==='rally'){p.state='idle';p.target=null;return}}
       const dmg=p.soldier?(v0&&v0.training>=0?2:1.4):0.7;
       t.hp-=dmg; p.swing=4; if((tick+p.id)%5===0)hitFx(t);
       if(t.type){if(t.hp<=0){t.dead=true;p.state='idle';p.target=null}}
@@ -1328,7 +1386,7 @@ function stepPerson(p){
   }
   if(p.path){
     if(p.goal!=='water'&&p.goal!=='food'&&!p.attack&&(p.soldier?(p.thirst>70||p.hunger>75):urgent)){abortJob(p);p.path=null;p.state='idle';p.goal=null;decide(p);return}
-    if(p.soldier&&(tick+p.id)%6===0){const e=findEnemy(p,p.state==='march'?7:12);if(e){p.path=null;p.goal=null;p.state='fight';p.target=e;return}}
+    if(p.soldier&&!gathering&&(tick+p.id)%6===0){const e=findEnemy(p,p.state==='march'?7:12);if(e){p.path=null;p.goal=null;p.state='fight';p.target=e;return}}
     if(p.thirst>22&&p.goal!=='water'&&(tick+p.id)%4===0&&canDrinkAt(ti)){p.thirst=0;p.lastWater=ti}
     const ni=p.path[p.pi];
     if(!walkable(ni)){abortJob(p);p.path=null;p.state='idle';p.wait=5;return}
@@ -1871,6 +1929,12 @@ function draw(){
     for(let k=-8;k<=0;k++)bp(0,k,'#6b4a2a');bp(0,-9,'#f2c14e');
     for(let fx=1;fx<=4;fx++)for(let fy=-8;fy<=-5;fy++){const off=(wave&&fx>2)?1:0;bp(fx,fy+off,col)}
     bp(2,-7+(wave?1:0),'rgba(255,255,255,.55)');
+  }
+  for(const f of fishers){
+    if(!vis(f.x,f.y))continue;
+    const v=villages.get(f.vid);const sx=ox+f.x*U,sy=oy+f.y*U,q=Math.max(1.5,z*1.1),bob=((frameN>>4)+f.vid)&1;
+    const bp=(cx,cy,col)=>{const xx=f.face>0?cx:3-cx;ctx.fillStyle=col;ctx.fillRect(Math.round(sx+(xx-2)*q),Math.round(sy+(cy-2+bob*0.3)*q),Math.ceil(q),Math.ceil(q))};
+    bp(1,0,v?vCss(v):'#fff');bp(1,1,'#f5f5f0');bp(2,1,'#e6e6e0');for(let k=0;k<4;k++)bp(k,2,'#7a5230');bp(1,3,'#5c3c22');bp(2,3,'#5c3c22');
   }
   for(const bt of boats){
     if(!vis(bt.x,bt.y))continue;
