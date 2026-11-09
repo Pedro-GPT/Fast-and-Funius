@@ -2350,7 +2350,7 @@ function draw(){
     if(sx<-80||sx>w+80||sy<-20||sy>h+20)continue;
     const n=nat(v),capital=n&&n.capital===v.id;
     if(S.onlyCapitals&&!capital)continue;
-    const label=z<0.5?v.name:`${capital?'♦ ':''}${v.name} · ${STAGES[v.stage]} · ${v.pop}${n&&n.war?' · en guerra':''}`;
+    const label=S.onlyCapitals&&n?`♦ ${n.name} · ${nationPop(n)} habitantes${n.war?' · en guerra':''}`:z<0.5?v.name:`${capital?'♦ ':''}${v.name} · ${STAGES[v.stage]} · ${v.pop}${n&&n.war?' · en guerra':''}`;
     const tw=ctx.measureText(label).width+14;
     ctx.fillStyle='rgba(15,21,32,.85)';ctx.fillRect(Math.round(sx-tw/2),Math.round(sy-9),Math.round(tw),18);
     ctx.fillStyle=vCss(v);ctx.fillRect(Math.round(sx-tw/2),Math.round(sy-9),4,18);
