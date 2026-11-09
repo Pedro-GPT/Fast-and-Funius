@@ -301,7 +301,8 @@ const FOCUS={equilibrado:{name:'Equilibrado',desc:'Un poco de todo.'},militar:{n
 const FOCUS_ORDER=['equilibrado','militar','agricola','comercial'];
 const ARMS=[{name:'Lanzas',dmg:1.4,range:0.95},{name:'Espadas de hierro',dmg:2,range:0.95},{name:'Arcos',dmg:1.7,range:3.5},{name:'Pistolas',dmg:3,range:5},{name:'Coches de guerra',dmg:3,range:5}];
 const PATHS={guerra:{name:'Guerra',desc:'Armas, coches de guerra y soldados mejor entrenados.'},comercio:{name:'Comercio',desc:'Oro, mercados, comprar y vender a otros países.'},desarrollo:{name:'Desarrollo',desc:'Fábricas, tren, aviones, hospitales, escuelas y alianzas.'}};
-const GOALS={none:{name:'Ninguno',desc:'La nación reparte sus esfuerzos.'},births:{name:'Más nacimientos',desc:'Una ley obliga a las familias a tener muchos hijos: en unos 20 años la población puede triplicarse. Mientras dure, la nación no avanza nada: ni armas, ni oro, ni avances, ni preguntas del Consejo.'},arms:{name:'Desarrollo de armas',desc:'Herrerías en todos los poblados y avances de armas mucho más rápidos.'},economy:{name:'Desarrollo económico',desc:'Mercados en todos los poblados y mucho más oro.'}};
+const LAW_BIRTHS=22;
+const GOALS={none:{name:'Ninguno',desc:'La nación reparte sus esfuerzos.'},births:{name:'Más nacimientos',desc:'Una ley obliga a las familias a tener muchos hijos: en unos 5 años la población puede multiplicarse por 7. Mientras dure, la nación no avanza nada: ni armas, ni oro, ni avances, ni preguntas del Consejo.'},arms:{name:'Desarrollo de armas',desc:'Herrerías en todos los poblados y avances de armas mucho más rápidos.'},economy:{name:'Desarrollo económico',desc:'Mercados en todos los poblados y mucho más oro.'}};
 const TECH0={arms:0,train:0,rail:false,air:false,cloth:false,foodf:false,hosp:false,school:false};
 const BUILD_TIME={[B.WALL]:14,[B.GATE]:14};
 const STAGES=['Campamento','Poblado','Pueblo','Ciudad','Reino'];
@@ -1100,14 +1101,18 @@ function daily(){
         addLog(v.hadLeader?`${v.name} ha elegido a ${best.name} como nuevo líder.`:`Los ${v.pop} habitantes de ${v.name} han elegido a ${best.name} como líder.`);v.hadLeader=true}
     }
     if(S.births&&(people.length<S.maxPop||v.focus==='militar')){
-      const free=vcap(v)-v.pop;
-      if(free>0&&v.houses.length){
-        const nb=nat(v),couples=Math.min(v.F,v.M),ff=(v.food>=v.pop*2?1:v.food>0?0.4:0.1)*(nb?nb.mods.birth*(nb.tech.cloth?1.25:1)*(nb.goal==='births'?2.2:1):1)*(v.focus==='agricola'?1.4:1);
+      const nb=nat(v),law=!!(nb&&nb.goal==='births');
+      const free=law?Infinity:vcap(v)-v.pop;
+      if(free>0&&(v.houses.length||law)){
+        const couples=law?Math.floor((v.F+v.M)/2):Math.min(v.F,v.M);
+        const foodF=v.food>=v.pop*2?1:v.food>0?0.4:0.1;
+        const rate=0.09*(law?Math.max(0.8,foodF)*LAW_BIRTHS:foodF)*(nb?nb.mods.birth*(nb.tech.cloth?1.25:1):1)*(v.focus==='agricola'?1.4:1);
         const moms=v.members.filter(p=>p.fem&&!isKid(p)),dads=v.members.filter(p=>!p.fem&&!isKid(p));
         let born=0;
         for(let k=0;k<couples&&born<free;k++){
-          if(rnd()<0.09*ff){
-            const h=pick(v.houses),mom=pick(moms),dad=pick(dads);
+          let kids=Math.floor(rate)+(rnd()<rate%1?1:0);
+          while(kids-->0&&born<free){
+            const h=v.houses.length?pick(v.houses):v.center,mom=pick(moms),dad=pick(dads);
             const b=makePerson(h%W,(h/W)|0,0);b.vid=v.id;b.parents=(mom&&dad)?`${mom.name} y ${dad.name}`:null;people.push(b);
             born++;v.births++;
           }
