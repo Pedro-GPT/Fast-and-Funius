@@ -687,7 +687,7 @@ function foundVillage(i,parent){
   villages.set(id,v);
   v.nid=parent&&nations.has(parent.nid)?parent.nid:newNation(v).id;
   bld[i]=B.CENTER;bOwn[i]=id;wood[i]=0;food[i]=0;stone[i]=0;ore[i]=0;mark(i);
-  addLog(parent?`Habitantes de ${parent.name} han fundado ${v.name}.`:`Se ha fundado ${v.name}, un campamento de cultura ${TRAITS[v.trait].name.toLowerCase()}.`);
+  if(!(parent&&parent.quiet))addLog(parent?`Habitantes de ${parent.name} han fundado ${v.name}.`:`Se ha fundado ${v.name}, un campamento de cultura ${TRAITS[v.trait].name.toLowerCase()}.`);
   return v;
 }
 function vcap(v){let c=0;for(const h of v.houses)c+=B_CAP[bld[h]]||0;if(v.center>=0&&bld[v.center]===B.CASTLE)c+=B_CAP[B.CASTLE];return c}
@@ -868,7 +868,13 @@ function periodic(){
       for(const p of v.members){if(v.soldiers<=target)break;if(p.soldier&&!p.attack&&p.state!=='fight'&&p.state!=='march'){p.soldier=false;v.soldiers--}}
     }
     // tropas de ataque
-    if(n&&n.war&&v.soldiers>0){
+    if(v.squad&&v.squad.claim){
+      const sq=v.squad,rx=sq.rally%W+.5,ry=((sq.rally/W)|0)+.5;
+      let all=0,near=0;for(const q of people){if(!q.dead&&q.attack===sq.target){all++;if(Math.hypot(q.x-rx,q.y-ry)<5)near++}}
+      for(const b of boats)if(b.troop&&b.sq===sq)all+=b.crew.length;
+      if(!all)endSquad(v,null);
+      else if(near&&(tick>=sq.until||near>=Math.ceil(all*0.85)))settleClaim(sq,v);
+    }else if(n&&n.war&&v.soldiers>0){
       const tv=v.squad&&villages.get(v.squad.target);
       if(v.squad&&v.squad.manual){
         const alive=v.members.filter(p=>p.attack===v.squad.target&&!p.dead).length+boats.reduce((s2,b)=>s2+(b.troop&&b.sq===v.squad?b.crew.length:0),0);
@@ -905,9 +911,40 @@ function rallyPoint(tv,sol){
   let f=-1;inR(tv.cx,tv.cy,10,(j,d)=>{if(f<0&&d>4&&walkable(j)&&!bld[j]&&regionAt(j)===tr)f=j});
   return f>=0?f:tv.center;
 }
+function orderClaim(v,count,tile){
+  const n=nat(v);if(!n)return false;
+  census();
+  const mine=new Set(nationVillages(n).map(o=>o.id));
+  const tr=regionAt(tile),pr=natPortRegions(n),coastOk=landingFor(tile)>=0;
+  const sol=people.filter(p=>{if(p.dead||!p.soldier||!mine.has(p.vid))return false;const r=regionAt(tileOf(p));return r===tr||(coastOk&&pr.has(r))})
+    .sort((a,b)=>Math.hypot(a.x-tile%W,a.y-tile/W)-Math.hypot(b.x-tile%W,b.y-tile/W)).slice(0,count);
+  if(!sol.length){toast('Ningún soldado puede llegar: está al otro lado del agua y hace falta un puerto para cruzar.');return false}
+  for(const p of people)if(mine.has(p.vid))p.attack=null;
+  const sq={target:-(tile+1),phase:'rally',until:tick+DAY*4,manual:true,claim:true,size:sol.length,banner:tile,rally:tile};
+  for(const p of sol){p.attack=sq.target;p.atBanner=false;p.path=null;p.target=null;p.state='idle';p.wait=0;const pv=villages.get(p.vid);if(pv)pv.squad=sq}
+  addLog(`Por orden divina, ${sol.length} soldado${sol.length===1?'':'s'} de ${n.name} marchan a conquistar nuevas tierras.`);
+  return true;
+}
+function settleClaim(sq,src){
+  if(sq.done)return;sq.done=true;
+  const n=nat(src);let i=sq.banner;
+  const tr=regionAt(i);
+  if(!walkable(i)||(bld[i]&&bld[i]!==B.RUIN)){let f=-1;inR(i%W,(i/W)|0,4,j=>{if(f<0&&walkable(j)&&(!bld[j]||bld[j]===B.RUIN)&&regionAt(j)===tr)f=j});i=f}
+  const settlers=people.filter(q=>!q.dead&&q.attack===sq.target);
+  for(const o of villages.values())if(o.squad===sq)o.squad=null;
+  if(i<0||!n){for(const q of settlers)q.attack=null;return}
+  if(bld[i]===B.RUIN)bld[i]=0;
+  const nv=foundVillage(i,{name:src.name,nid:n.id,trait:src.trait,quiet:true});if(!nv){for(const q of settlers)q.attack=null;return}
+  let k=0;
+  for(const q of settlers){q.attack=null;q.path=null;q.state='idle';q.wait=3;if(Math.hypot(q.x-i%W,q.y-i/W)<10){q.vid=nv.id;k++}}
+  nv.food=Math.max(nv.food,10);nv.wood=Math.max(nv.wood,10);
+  addLog(`¡${k} soldado${k===1?'':'s'} de ${n.name} conquistan nuevas tierras y fundan ${nv.name}!`);
+  census();updateTerritory();
+}
 function squadOf(p){if(!p.attack)return null;const v=villages.get(p.vid);return v&&v.squad&&v.squad.manual&&v.squad.target===p.attack?v.squad:null}
 function orderAttack(v,tv,count,banner){
   const n=nat(v);let tn=nat(tv);if(!n||!tn)return false;
+  if(S.warMode==='off'){toast('Las guerras están prohibidas en Ajustes. Solo puedes mandarlos a tierras vacías.');return false}
   if(tn===n){
     if(n.capital===tv.id){toast('No puedes atacar la capital de tu propia nación.');return false}
     const nn=newNation(tv);tv.nid=nn.id;markVillage(tv);tn=nn;updateTerritory();
@@ -1323,7 +1360,7 @@ function soldierThink(p,v){
   const e=sqd&&sqd.phase==='rally'?null:findEnemy(p,n&&n.war?10:14);
   if(e){p.state='fight';p.target=e;p.path=null;return}
   if(!(n&&n.war)&&!p.attack&&v.center>=0&&rnd()<0.92){if(chooseWork(p,v))return}
-  const attacker=n&&n.war&&v.squad&&(v.squad.manual?p.attack===v.squad.target:(p.id%5)<(v.trait==='guerrero'?4:3));
+  const attacker=v.squad&&(v.squad.manual?p.attack===v.squad.target&&(v.squad.claim||(n&&n.war)):n&&n.war&&(p.id%5)<(v.trait==='guerrero'?4:3));
   if(attacker){
     const tv=villages.get(v.squad.target);
     if(v.squad.phase==='rally'&&v.squad.manual&&v.squad.rally!=null){
@@ -1888,8 +1925,13 @@ function tapAt(sx,sy){
     if(!inMap)return;
     let tv=null,bd=16;
     const own=terOwn[ty*W+tx];
-    for(const o of villages.values()){if(o===v||o.center<0)continue;let d=Math.hypot(o.cx-tx,o.cy-ty);if(own&&o.nid===own)d-=3;if(d<bd){bd=d;tv=o}}
-    if(!tv){toast('Toca cerca de un poblado para conquistarlo.');return}
+    for(const o of villages.values()){if(o===v||o.center<0)continue;let d=Math.hypot(o.cx-tx,o.cy-ty);if(o.nid===v.nid&&d>=5)continue;if(own&&o.nid===own)d-=3;if(d<bd){bd=d;tv=o}}
+    if(!tv){
+      let ct=ty*W+tx;if(!walkable(ct)||(bld[ct]&&bld[ct]!==B.RUIN)){let f=-1;inR(tx,ty,3,j=>{if(f<0&&walkable(j)&&(!bld[j]||bld[j]===B.RUIN))f=j});ct=f}
+      if(ct<0){toast('Ahí no se puede fundar nada: toca tierra firme.');return}
+      if(orderClaim(v,aim.count,ct)){aim=null;selected=null;ctlSig='';renderCard();effects.push({type:'ring',x:ct%W+.5,y:((ct/W)|0)+.5,r:3,t:0,max:30,col:vColor(v).join(',')})}
+      return;
+    }
     let bt=ty*W+tx;if(!walkable(bt)){let f=-1;inR(tx,ty,3,j=>{if(f<0&&walkable(j))f=j});bt=f>=0?f:tv.center}
     if(orderAttack(v,tv,aim.count,bt)){aim=null;selected=null;ctlSig='';renderCard();effects.push({type:'ring',x:bt%W+.5,y:((bt/W)|0)+.5,r:3,t:0,max:30,col:vColor(v).join(',')})}
     return;
@@ -2099,7 +2141,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 let ctlSig='';
 function renderCard(){
   $('#aimBar').hidden=!aim;
-  if(aim){const v=villages.get(aim.vid);$('#aimText').textContent=`Toca el poblado que ${v?v.name:''} debe conquistar (${aim.count} soldado${aim.count===1?'':'s'}).`;cardEl.hidden=true;return}
+  if(aim){const v=villages.get(aim.vid);$('#aimText').textContent=`Toca un poblado para conquistarlo o tierra vacía para fundar uno nuevo (${aim.count} soldado${aim.count===1?'':'s'}).`;cardEl.hidden=true;return}
   if(!selected){cardEl.hidden=true;cardCtl.hidden=true;ctlSig='';return}
   cardEl.hidden=false;
   const s=selected,fb=$('#cFollow');
@@ -2150,19 +2192,18 @@ function attackTargets(v){
   return out.sort((a,b)=>a.d-b.d).slice(0,8);
 }
 function attackHtml(v,n,targets){
-  if(S.warMode==='off')return'';
   let h='<div class="atk">';
   const nvs=n?nationVillages(n):[v],ids=new Set(nvs.map(o=>o.id));
   const sqv=nvs.find(o=>o.squad&&o.squad.manual),sq=sqv?sqv.squad:null;
   const total=nvs.reduce((s2,o)=>s2+o.soldiers,0);
   if(sq){
     const tv=villages.get(sq.target),k=people.filter(p=>!p.dead&&p.attack===sq.target&&ids.has(p.vid)).length;
-    h+=`<div><b>${k}</b> soldado${k===1?'':'s'} ${sq.phase==='rally'?'se reúnen para atacar':'marchan contra'} ${tv?esc(tv.name):'el enemigo'}.</div><button class="px" type="button" data-act="retreat">Retirar la tropa</button></div>`;
+    h+=sq.claim?`<div><b>${k}</b> soldado${k===1?'':'s'} marchan a conquistar nuevas tierras.</div>`:`<div><b>${k}</b> soldado${k===1?'':'s'} ${sq.phase==='rally'?'se reúnen para atacar':'marchan contra'} ${tv?esc(tv.name):'el enemigo'}.</div><button class="px" type="button" data-act="retreat">Retirar la tropa</button></div>`;
     return h;
   }
   if(!total){h+=`<div class="lbl">La nación no tiene soldados para atacar.</div></div>`;return h}
   if(aim&&aim.vid===v.id){
-    h+=`<div><b>Toca en el mapa</b> el poblado que quieres conquistar. Allí se clavará el estandarte de ${esc(n?n.name:v.name)}.</div><button class="px" type="button" data-act="aimcancel">Cancelar</button>`;
+    h+=`<div><b>Toca en el mapa</b> un poblado para conquistarlo, o tierra vacía para fundar uno nuevo. Allí se clavará el estandarte de ${esc(n?n.name:v.name)}.</div><button class="px" type="button" data-act="aimcancel">Cancelar</button>`;
   }else if(!atkSel){
     h+=`<button class="px wide warn" type="button" data-act="atk">Mandar soldados a conquistar…</button>`;
   }else{
@@ -2475,7 +2516,7 @@ resize();renderTabs();renderTools();generate();
 requestAnimationFrame(frame);
 openMenu();
 
-window.__mw={S,get people(){return people},get animals(){return animals},get villages(){return villages},get nations(){return nations},get tick(){return tick},step,generate,log,cam,view,CATS,applyPower,declareWar,makePeace,planWalls,encodeWorld,decodeWorld,saveNow,Store,newNation,markVillage,updateTerritory,orderAttack,get W(){return W},regionAt,setTerrain,spawnGroup,adoptOrphans,placeBuilding,get boats(){return boats},get cur(){return cur},set cur(v){cur=v},Save};
+window.__mw={S,get people(){return people},get animals(){return animals},get villages(){return villages},get nations(){return nations},get tick(){return tick},step,generate,log,cam,view,CATS,applyPower,declareWar,makePeace,planWalls,encodeWorld,decodeWorld,saveNow,Store,newNation,orderClaim,markVillage,updateTerritory,orderAttack,get W(){return W},regionAt,setTerrain,spawnGroup,adoptOrphans,placeBuilding,get boats(){return boats},get cur(){return cur},set cur(v){cur=v},Save};
 })();
 </script>
 </body></html>
