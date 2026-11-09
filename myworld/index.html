@@ -348,6 +348,7 @@ function classify(e,m,tmp){
   return GRASS;
 }
 function allocWorld(n){
+  regionsDirty=true;
   W=H=n;N=W*H;
   terr=new Uint8Array(N);hgt=new Float32Array(N);food=new Uint8Array(N);wood=new Uint8Array(N);stone=new Uint8Array(N);ore=new Uint8Array(N);
   bld=new Uint8Array(N);bOwn=new Uint16Array(N);fire=new Uint8Array(N);terOwn=new Uint16Array(N);
@@ -582,6 +583,33 @@ function query(grid,x,y,r,fn){
   for(let cy=r0;cy<=r1;cy++)for(let cx=c0;cx<=c1;cx++){const arr=grid[cy*GW+cx];for(let k=0;k<arr.length;k++){const e=arr[k];if(!e.dead&&Math.abs(e.x-x)<=r&&Math.abs(e.y-y)<=r)fn(e)}}
 }
 
+/* ════════════ Tierras (regiones unidas por tierra) ════════════ */
+let region=null,regionsDirty=true;
+function computeRegions(){
+  if(!region||region.length!==N)region=new Int32Array(N);
+  region.fill(0);const st=new Int32Array(N);let id=0;
+  for(let i=0;i<N;i++){
+    if(region[i]||!TER[terr[i]].walk)continue;
+    id++;let sp=0;st[sp++]=i;region[i]=id;
+    while(sp){const j=st[--sp],x=j%W,y=(j/W)|0;
+      if(x>0){const k=j-1;if(!region[k]&&TER[terr[k]].walk){region[k]=id;st[sp++]=k}}
+      if(x<W-1){const k=j+1;if(!region[k]&&TER[terr[k]].walk){region[k]=id;st[sp++]=k}}
+      if(y>0){const k=j-W;if(!region[k]&&TER[terr[k]].walk){region[k]=id;st[sp++]=k}}
+      if(y<H-1){const k=j+W;if(!region[k]&&TER[terr[k]].walk){region[k]=id;st[sp++]=k}}
+    }
+  }
+  regionsDirty=false;
+}
+function regionAt(i){if(regionsDirty||!region||region.length!==N)computeRegions();return region[i]}
+const vRegion=v=>v&&v.center>=0?regionAt(v.center):-1;
+function natPortRegions(n){const out=new Set();for(const v of villages.values())if(v.nid===n.id&&v.port>=0&&bld[v.port]===B.PORT)out.add(regionAt(v.port));return out}
+function natPortIn(n,reg){for(const v of villages.values())if(v.nid===n.id&&v.port>=0&&bld[v.port]===B.PORT&&regionAt(v.port)===reg)return v.port;return -1}
+function landingFor(rally){
+  const reg=regionAt(rally);
+  const path=bfs(rally,i=>isCoast(i)&&regionAt(i)===reg,N);
+  return path?(path.length?path[path.length-1]:rally):-1;
+}
+
 /* ════════════ Caminos ════════════ */
 let bfsQ=new Int32Array(9000),bfsPar=null,bfsStamp=null,curStamp=0;
 function ensureBfs(){if(!bfsPar||bfsPar.length!==N){bfsPar=new Int32Array(N);bfsStamp=new Uint32Array(N);bfsQ=new Int32Array(Math.max(9000,N));curStamp=0}}
@@ -814,7 +842,8 @@ function adoptOrphans(){
     if(p.vid&&villages.has(p.vid)&&villages.get(p.vid).center>=0)continue;
     p.vid=0;
     let best=null,bd=30;
-    for(const v of villages.values()){if(v.center<0)continue;const d=Math.hypot(v.cx-p.x,v.cy-p.y);if(d<bd){bd=d;best=v}}
+    const pr=regionAt(tileOf(p));
+    for(const v of villages.values()){if(v.center<0||vRegion(v)!==pr)continue;const d=Math.hypot(v.cx-p.x,v.cy-p.y);if(d<bd){bd=d;best=v}}
     if(best){p.vid=best.id;continue}
     if(isKid(p))continue;
     const i=tileOf(p);
@@ -842,12 +871,13 @@ function periodic(){
     if(n&&n.war&&v.soldiers>0){
       const tv=v.squad&&villages.get(v.squad.target);
       if(v.squad&&v.squad.manual){
-        const alive=v.members.filter(p=>p.attack===v.squad.target&&!p.dead).length;
+        const alive=v.members.filter(p=>p.attack===v.squad.target&&!p.dead).length+boats.reduce((s2,b)=>s2+(b.troop&&b.sq===v.squad?b.crew.length:0),0);
         if(!tv||tv.nid!==n.war.enemy){endSquad(v,null)}
         else if(!alive){endSquad(v,`Los soldados de ${v.name} han caído atacando ${tv.name}.`)}
         else if(v.squad.phase==='rally'){
           const sq=v.squad,rx=sq.rally%W+.5,ry=((sq.rally/W)|0)+.5;
           let all=0,near=0;for(const q of people){if(!q.dead&&q.attack===sq.target&&squadOf(q)===sq){all++;if(Math.hypot(q.x-rx,q.y-ry)<5)near++}}
+          for(const b of boats)if(b.troop&&b.sq===sq)all+=b.crew.length;
           if(tick>=sq.until||(all&&near>=Math.ceil(all*0.85))){if(sq.phase==='rally'){sq.phase='march';addLog(`¡La tropa ya está reunida junto a ${tv.name} y ataca!`)}}
         }
       }else if(!v.squad||!tv||tv.nid!==n.war.enemy){
@@ -860,6 +890,7 @@ function periodic(){
 }
 function endSquad(v,msg){v.squad=null;for(const p of v.members)if(p.attack){p.attack=null;if(p.state==='march'||p.state==='rally'){p.path=null;p.state='idle'}}if(msg)addLog(msg)}
 function rallyPoint(tv,sol){
+  const tr=vRegion(tv);
   let mx=0,my=0;for(const p of sol){mx+=p.x;my+=p.y}
   if(sol.length){mx/=sol.length;my/=sol.length}else{mx=tv.cx;my=tv.cy}
   let dx=mx-tv.cx,dy=my-tv.cy;const d=Math.hypot(dx,dy)||1;dx/=d;dy/=d;
@@ -868,10 +899,11 @@ function rallyPoint(tv,sol){
     for(const a of [0,.3,-.3,.6,-.6,1,-1]){
       const ca=Math.cos(a),sa=Math.sin(a),vx=dx*ca-dy*sa,vy=dx*sa+dy*ca;
       const x=Math.round(tv.cx+vx*r),y=Math.round(tv.cy+vy*r);if(x<0||y<0||x>=W||y>=H)continue;
-      const i=y*W+x;if(walkable(i)&&!bld[i])return i;
+      const i=y*W+x;if(walkable(i)&&!bld[i]&&regionAt(i)===tr)return i;
     }
   }
-  return tileOf(sol[0]||{x:tv.cx,y:tv.cy});
+  let f=-1;inR(tv.cx,tv.cy,10,(j,d)=>{if(f<0&&d>4&&walkable(j)&&!bld[j]&&regionAt(j)===tr)f=j});
+  return f>=0?f:tv.center;
 }
 function squadOf(p){if(!p.attack)return null;const v=villages.get(p.vid);return v&&v.squad&&v.squad.manual&&v.squad.target===p.attack?v.squad:null}
 function orderAttack(v,tv,count,banner){
@@ -887,7 +919,9 @@ function orderAttack(v,tv,count,banner){
   census();
   const mine=new Set(nationVillages(n).map(o=>o.id));
   for(const p of people)if(mine.has(p.vid))p.attack=null;
-  const sol=people.filter(p=>!p.dead&&p.soldier&&mine.has(p.vid)).sort((a,b)=>Math.hypot(a.x-tv.cx,a.y-tv.cy)-Math.hypot(b.x-tv.cx,b.y-tv.cy)).slice(0,count);
+  const tr=vRegion(tv),pr=natPortRegions(n),coastOk=landingFor(tv.center)>=0;
+  const sol=people.filter(p=>{if(p.dead||!p.soldier||!mine.has(p.vid))return false;const r=regionAt(tileOf(p));return r===tr||(coastOk&&pr.has(r))}).sort((a,b)=>Math.hypot(a.x-tv.cx,a.y-tv.cy)-Math.hypot(b.x-tv.cx,b.y-tv.cy)).slice(0,count);
+  if(!sol.length){toast('Ningún soldado puede llegar: está al otro lado del agua y hace falta un puerto para cruzar.');return false}
   const sq={target:tv.id,phase:'rally',until:tick+DAY*4,manual:true,size:sol.length,banner:banner??tv.center,rally:rallyPoint(tv,sol)};
   for(const p of sol){p.attack=tv.id;p.atBanner=false;p.path=null;p.target=null;p.state='idle';p.wait=0;const pv=villages.get(p.vid);if(pv)pv.squad=sq}
   addLog(`Por orden divina, ${sol.length} soldado${sol.length===1?'':'s'} de ${n.name} marchan a conquistar ${tv.name}.`);
@@ -895,7 +929,8 @@ function orderAttack(v,tv,count,banner){
 }
 function nearestEnemyVillage(v,enemyNid){
   let best=null,bd=70;
-  for(const o of villages.values()){if(o.nid!==enemyNid||o.center<0)continue;const d=Math.hypot(o.cx-v.cx,o.cy-v.cy);if(d<bd){bd=d;best=o}}
+  const vr=vRegion(v);
+  for(const o of villages.values()){if(o.nid!==enemyNid||o.center<0||vRegion(o)!==vr)continue;const d=Math.hypot(o.cx-v.cx,o.cy-v.cy);if(d<bd){bd=d;best=o}}
   return best;
 }
 
@@ -1002,7 +1037,27 @@ function trySeaColony(v){
   boats.push({x:v.port%W+.5,y:((v.port/W)|0)+.5,tx:best%W+.5,ty:((best/W)|0)+.5,target:best,crew,from:{name:v.name,nid:v.nid,trait:v.trait},food:f,wood:w,face:1});
   addLog(`Un barco de ${v.name} zarpa con ${crew.length} colonos hacia nuevas tierras.`);
 }
+function embark(p,port,sq){
+  if(sq.landing==null)sq.landing=landingFor(sq.rally);
+  if(sq.landing<0){p.attack=null;return}
+  let b=boats.find(o=>o.troop&&o.port===port&&o.sq===sq&&tick<o.departAt);
+  if(!b){
+    const px=port%W,py=(port/W)|0;let wx=px+.5,wy=py+.5;
+    for(const [dx,dy] of DIRS){const x=px+dx,y=py+dy;if(x>=0&&y>=0&&x<W&&y<H&&isWater(terr[y*W+x])){wx=x+.5;wy=y+.5;break}}
+    const v=villages.get(p.vid);
+    b={troop:true,port,sq,x:wx,y:wy,tx:sq.landing%W+.5,ty:((sq.landing/W)|0)+.5,target:sq.landing,crew:[],departAt:tick+40,from:{name:v?v.name:'',nid:v?v.nid:0},face:1};
+    boats.push(b);
+    addLog(`Un barco de guerra de ${v?v.name:'la nación'} carga soldados para cruzar el mar.`,false);
+  }
+  abortJob(p);p.path=null;p.state='idle';p.dead=true;p.boarded=true;b.crew.push(p);
+}
 function landBoat(b){
+  if(b.troop){
+    const i=b.target;
+    for(const p of b.crew){p.dead=false;p.boarded=false;p.x=i%W+.5+(rnd()-.5);p.y=((i/W)|0)+.5+(rnd()-.5);if(!walkable(tileOf(p))){p.x=i%W+.5;p.y=((i/W)|0)+.5}p.state='idle';p.wait=2;people.push(p)}
+    if(b.crew.length)addLog(b.crew.length===1?'Un soldado ha desembarcado en la otra orilla.':`${b.crew.length} soldados han desembarcado en la otra orilla.`);
+    return;
+  }
   let i=b.target;
   if(!walkable(i)||(bld[i]&&bld[i]!==B.RUIN)){let f=-1;inR(i%W,(i/W)|0,4,j=>{if(f<0&&walkable(j)&&!bld[j])f=j});i=f}
   if(i<0)return;
@@ -1018,7 +1073,7 @@ function checkInstantConquest(){
     const tv=villages.get(v.squad.target);if(!tv||tv.nid!==n.war.enemy||tv.center<0)continue;
     let def=false;for(const q of people){if(!q.dead&&q.vid===tv.id&&q.soldier){def=true;break}}
     if(def)continue;
-    let near=false;for(const q of people){if(!q.dead&&q.vid===v.id&&q.soldier&&(v.squad.manual?q.attack===tv.id:true)&&Math.hypot(q.x-tv.cx-.5,q.y-tv.cy-.5)<14){near=true;break}}
+    let near=false;const tr=vRegion(tv);for(const q of people){if(!q.dead&&q.vid===v.id&&q.soldier&&(v.squad.manual?q.attack===tv.id:true)&&Math.hypot(q.x-tv.cx-.5,q.y-tv.cy-.5)<14&&regionAt(tileOf(q))===tr){near=true;break}}
     if(near){const fl=Math.floor(tv.food/2),wl=Math.floor(tv.wood/2);tv.food-=fl;tv.wood-=wl;v.food+=fl;v.wood+=wl;addLog(`${tv.name} se ha quedado sin soldados y se rinde.`);conquer(n,tv)}
   }
 }
@@ -1052,6 +1107,7 @@ function stepBoats(){
   if(!boats.length)return;
   for(const b of boats){
     const dx=b.tx-b.x,dy=b.ty-b.y,d=Math.hypot(dx,dy);
+    if(b.troop&&tick<b.departAt)continue;
     if(d<0.5){landBoat(b);b.done=true;continue}
     const sp=Math.min(0.3,d);b.x+=dx/d*sp;b.y+=dy/d*sp;b.face=dx>=0?1:-1;
   }
@@ -1075,7 +1131,7 @@ function makePeace(a,b,msg){
 }
 function nationsDistance(a,b){
   let best=1e9;
-  for(const va of villages.values()){if(va.nid!==a.id)continue;for(const vb of villages.values()){if(vb.nid!==b.id)continue;best=Math.min(best,Math.hypot(va.cx-vb.cx,va.cy-vb.cy))}}
+  for(const va of villages.values()){if(va.nid!==a.id)continue;for(const vb of villages.values()){if(vb.nid!==b.id||vRegion(va)!==vRegion(vb))continue;best=Math.min(best,Math.hypot(va.cx-vb.cx,va.cy-vb.cy))}}
   return best;
 }
 function dailyWars(){
@@ -1108,10 +1164,10 @@ function isEnemyOf(p,q){
   const n=nations.get(pv.nid);return !!(n&&n.war&&n.war.enemy===qv.nid);
 }
 function findEnemy(p,r){
-  let best=null,bd=r*r;
-  query(gridA,p.x,p.y,r,a=>{if(a.type==='lobo'){const d=(a.x-p.x)**2+(a.y-p.y)**2;if(d<bd){bd=d;best=a}}});
+  let best=null,bd=r*r;const pr=regionAt(tileOf(p));
+  query(gridA,p.x,p.y,r,a=>{if(a.type==='lobo'&&regionAt(tileOf(a))===pr){const d=(a.x-p.x)**2+(a.y-p.y)**2;if(d<bd){bd=d;best=a}}});
   const n=nat(villages.get(p.vid));
-  if(n&&n.war)query(gridP,p.x,p.y,r,q=>{if(isEnemyOf(p,q)){const d=(q.x-p.x)**2+(q.y-p.y)**2;if(d<bd){bd=d;best=q}}});
+  if(n&&n.war)query(gridP,p.x,p.y,r,q=>{if(isEnemyOf(p,q)&&regionAt(tileOf(q))===pr){const d=(q.x-p.x)**2+(q.y-p.y)**2;if(d<bd){bd=d;best=q}}});
   return best;
 }
 function conquer(an,tv){
@@ -1272,6 +1328,14 @@ function soldierThink(p,v){
     const tv=villages.get(v.squad.target);
     if(v.squad.phase==='rally'&&v.squad.manual&&v.squad.rally!=null){
       const rp=v.squad.rally,rx=rp%W,ry=(rp/W)|0;
+      const myR=regionAt(tileOf(p));
+      if(myR!==regionAt(rp)){
+        const port=n?natPortIn(n,myR):-1;
+        if(port<0){p.attack=null;wander(p,v,6);return}
+        if(Math.hypot(port%W+.5-p.x,((port/W)|0)+.5-p.y)<1.8){embark(p,port,v.squad);return}
+        const path=bfs(tileOf(p),i=>i===port,N);if(path&&path.length){setPath(p,path,'rally','rally');return}
+        p.attack=null;wander(p,v,6);return;
+      }
       if(Math.hypot(rx+.5-p.x,ry+.5-p.y)>3){const path=bfs(tileOf(p),i=>Math.abs(i%W-rx)<=2&&Math.abs(((i/W)|0)-ry)<=2,N);if(path&&path.length){setPath(p,path,'rally','rally');return}}
       p.state='rally';p.wait=10;return;
     }
@@ -1510,6 +1574,7 @@ function stepTornados(){
 /* ════════════ Terreno ════════════ */
 function setTerrain(i,t){
   if(terr[i]===t)return;
+  if(TER[terr[i]].walk!==TER[t].walk)regionsDirty=true;
   terr[i]=t;hgt[i]=clamp(TER[t].h+(hash2(i,t,11)-0.5)*0.06,0,1);
   if(isWater(t)||t===LAVA){wood[i]=stone[i]=ore[i]=0;food[i]=isWater(t)?Math.min(food[i],capF[t]||0):0;if(fire[i]){fire[i]=0;fireSet.delete(i)}}
   else{
@@ -2249,14 +2314,15 @@ function b64dec(str){const s=atob(str),out=new Uint8Array(s.length);for(let i=0;
 async function gzip(bytes){if(typeof CompressionStream!=='function')return null;const st=new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));return new Uint8Array(await new Response(st).arrayBuffer())}
 async function gunzip(bytes){const st=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));return new Uint8Array(await new Response(st).arrayBuffer())}
 function snapshotWorld(){
-  for(const b of boats)landBoat(b);boats=[];
+  for(const b of boats)if(!b.troop)landBoat(b);boats=boats.filter(b=>b.troop);
+  const afloat=[];for(const b of boats)for(const p of b.crew)afloat.push({...p,dead:false,x:b.target%W+.5,y:((b.target/W)|0)+.5});
   const pf=['id','name','fem','x','y','home','vid','ageT','hunger','thirst','energy','hp','cf','cw','cs','soldier','leader','sick','immune','charisma','parents','shirt','skin','hair','lastWater','attack'];
   const json={v:2,S:{...S},W,tick,nextId,nextAid,nextVid,nextNid,milestone,cam:{x:cam.x,y:cam.y,z:cam.z},
     nations:[...nations.values()].map(n=>({id:n.id,name:n.name,color:n.color,capital:n.capital,war:n.war,founded:n.founded,noColonies:!!n.noColonies,noIndep:!!n.noIndep})),
     villages:[...villages.values()].map(v=>({id:v.id,name:v.name,nid:v.nid,center:v.center,cx:v.cx,cy:v.cy,stage:v.stage,trait:v.trait,food:v.food,wood:v.wood,stone:v.stone,
       houses:v.houses,farms:v.farms,walls:v.walls,barracks:v.barracks,training:v.training,port:v.port,firstTower:!!v.firstTower,leader:v.leader?v.leader.id:0,hadLeader:v.hadLeader,founded:v.founded,births:v.births,
       noStone:Math.max(-1e6,v.noStone),parent:v.parent,policy:v.policy,wallPlan:v.wallPlan,wallR:v.wallR,wallsDone:!!v.wallsDone,squad:v.squad})),
-    people:people.filter(p=>!p.dead).map(p=>{const o={};for(const k of pf)o[k]=p[k];if(p.job&&p.job.kind==='build')o.job=p.job;return o}),
+    people:people.filter(p=>!p.dead).concat(afloat).map(p=>{const o={};for(const k of pf)o[k]=p[k];if(p.job&&p.job.kind==='build')o.job=p.job;return o}),
     animals:animals.filter(a=>!a.dead).map(a=>({id:a.id,type:a.type,x:a.x,y:a.y,hp:a.hp,vid:a.vid,hunger:a.hunger})),
     lava:[...lavaMap],droughts,tornados,log:log.slice(0,150)};
   const js=new TextEncoder().encode(JSON.stringify(json));
@@ -2409,7 +2475,7 @@ resize();renderTabs();renderTools();generate();
 requestAnimationFrame(frame);
 openMenu();
 
-window.__mw={S,get people(){return people},get animals(){return animals},get villages(){return villages},get nations(){return nations},get tick(){return tick},step,generate,log,cam,view,CATS,applyPower,declareWar,makePeace,planWalls,encodeWorld,decodeWorld,saveNow,Store,newNation,markVillage,updateTerritory,orderAttack,get W(){return W},get boats(){return boats},get cur(){return cur},set cur(v){cur=v},Save};
+window.__mw={S,get people(){return people},get animals(){return animals},get villages(){return villages},get nations(){return nations},get tick(){return tick},step,generate,log,cam,view,CATS,applyPower,declareWar,makePeace,planWalls,encodeWorld,decodeWorld,saveNow,Store,newNation,markVillage,updateTerritory,orderAttack,get W(){return W},regionAt,setTerrain,spawnGroup,adoptOrphans,placeBuilding,get boats(){return boats},get cur(){return cur},set cur(v){cur=v},Save};
 })();
 </script>
 </body></html>
